@@ -287,9 +287,6 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
     <div class="form-group"><label class="form-label">Login (somente números do CPF)</label><input class="form-input" id="login-user" placeholder="Ex: 11111111111" inputmode="numeric"></div>
     <div class="form-group"><label class="form-label">Senha (data de nascimento DDMMAAAA)</label><input class="form-input" id="login-pass" type="password" placeholder="Ex: 01011990" inputmode="numeric"></div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:14px;margin-top:8px;" onclick="doLogin()">Entrar</button>
-    <div style="margin-top:18px;padding:12px;background:rgba(255,255,255,.04);border-radius:9px;font-size:11.5px;color:var(--muted);text-align:center;">
-      <strong style="color:var(--accent)">Demo ADM:</strong> Login <code style="color:var(--text)">11111111111</code> · Senha <code style="color:var(--text)">01011990</code>
-    </div>
   </div>
 </div>
 <button class="hamburger" onclick="toggleSidebar()">☰</button>
@@ -927,24 +924,39 @@ function notify(msg,err=false){ const n=document.getElementById('notify');n.text
 function newId(){ return Date.now() + Math.floor(Math.random()*1000); }
 
 // ── SEEDS ──
-function seedContas(){ return [{id:1,nome:'Caixa Físico',tipo:'Caixa Físico',banco:'Outro',icone:'💵',agencia:'',numero:'',saldoIni:500,cor:'#2ECC71',formaPadrao:'Dinheiro',obs:''},{id:2,nome:'Conta Corrente',tipo:'Conta Corrente',banco:'Itaú',icone:'🏦',agencia:'0001',numero:'12345-6',saldoIni:2000,cor:'#3498DB',formaPadrao:'Pix',obs:''},{id:3,nome:'Conta Digital',tipo:'Carteira Digital',banco:'Nubank',icone:'📱',agencia:'',numero:'',saldoIni:800,cor:'#9B59B6',formaPadrao:'Pix',obs:''}]; }
-function seedFuncionarios(){ return [{id:1,nome:'Maria Admin',cargo:'Proprietária',cpf:'111.111.111-11',nascimento:'1990-01-01',admissao:'2020-01-01',tel:'',email:'',end:'',salario:0,contrato:'Sócio',turno:'Integral',status:'Ativo',perfil:'adm',pis:'',ctps:'',contaSal:'Conta Corrente',bancoSal:'',permissoes:{dashboard:true,caixa:true,'contas-banco':true,lancamentos:true,'contas-pagar':true,'contas-receber':true,fluxo:true,dre:true,rh:true,relatorio:true,cadastros:true},obs:''},{id:2,nome:'Ana Paula Souza',cargo:'Atendente',cpf:'222.222.222-22',nascimento:'1995-05-15',admissao:'2024-03-01',tel:'',email:'',end:'',salario:1500,contrato:'CLT',turno:'Manhã',status:'Ativo',perfil:'operador',pis:'',ctps:'',contaSal:'Conta Corrente',bancoSal:'Nubank',permissoes:{dashboard:true,caixa:true,'contas-banco':false,lancamentos:true,'contas-pagar':false,'contas-receber':false,fluxo:false,dre:false,rh:false,relatorio:false,cadastros:false},obs:''},{id:3,nome:'Carlos Eduardo Lima',cargo:'Cozinheiro',cpf:'333.333.333-33',nascimento:'1988-11-20',admissao:'2023-06-15',tel:'',email:'',end:'',salario:1800,contrato:'CLT',turno:'Integral',status:'Ativo',perfil:'operador',pis:'',ctps:'',contaSal:'Conta Corrente',bancoSal:'Itaú',permissoes:{dashboard:true,caixa:false,'contas-banco':false,lancamentos:false,'contas-pagar':false,'contas-receber':false,fluxo:false,dre:false,rh:false,relatorio:false,cadastros:false},obs:''}]; }
-function seedFornecedores(){ return [{id:1,nome:'Distribuidora Pão Quente',fantasia:'Pão Quente',doc:'12.345.678/0001-90',cat:'Alimentos',tel:'',email:'',prazo:'7 dias',status:'Ativo',end:'',obs:''},{id:2,nome:'Bebidas BH Distribuidora',fantasia:'Bebidas BH',doc:'98.765.432/0001-10',cat:'Bebidas',tel:'',email:'',prazo:'30 dias',status:'Ativo',end:'',obs:''}]; }
-function seedTiposRec(){ return [{id:1,nome:'Alimentação',emoji:'🍔',cor:'green',desc:'Lanches e refeições'},{id:2,nome:'Bebidas',emoji:'🥤',cor:'blue',desc:'Refrigerantes e sucos'},{id:3,nome:'Encomendas',emoji:'📦',cor:'purple',desc:'Pedidos para eventos'},{id:4,nome:'Delivery',emoji:'🛵',cor:'orange',desc:'Pedidos via apps'},{id:5,nome:'Outros',emoji:'💰',cor:'teal',desc:'Receitas diversas'}]; }
-function seedTiposDesp(){ return [{id:1,nome:'Fornecedores',emoji:'🏭',cor:'red',desc:'Pagamentos a fornecedores'},{id:2,nome:'Salários',emoji:'👥',cor:'purple',desc:'Folha de pagamento'},{id:3,nome:'Aluguel',emoji:'🏠',cor:'orange',desc:'Aluguel e condomínio'},{id:4,nome:'Utilities',emoji:'⚡',cor:'blue',desc:'Luz, água, gás'},{id:5,nome:'Manutenção',emoji:'🔧',cor:'teal',desc:'Reparos'},{id:6,nome:'Marketing',emoji:'📢',cor:'green',desc:'Anúncios'},{id:7,nome:'Limpeza',emoji:'🧹',cor:'teal',desc:'Produtos de limpeza'},{id:8,nome:'Taxas e Tarifas',emoji:'💸',cor:'red',desc:'Taxas bancárias e de processadoras'},{id:9,nome:'13º Salário',emoji:'🎄',cor:'purple',desc:'Décimo terceiro salário'},{id:10,nome:'Férias',emoji:'🏖️',cor:'blue',desc:'Pagamento de férias'},{id:11,nome:'Rescisão',emoji:'📋',cor:'red',desc:'Verbas rescisórias'},{id:12,nome:'Outros',emoji:'📋',cor:'red',desc:'Despesas diversas'}]; }
-function seedLancamentos(){
-  const s=[
-    {tipo:'Receita',desc:'Vendas — Lanches',valor:850,data:'2026-06-26',cat:'Alimentação',status:'Pago',conta:'Caixa Físico',forma:'Dinheiro',entidade:'',obs:''},
-    {tipo:'Receita',desc:'Vendas — Bebidas',valor:320,data:'2026-06-26',cat:'Bebidas',status:'Pago',conta:'Conta Corrente',forma:'Pix',entidade:'',obs:''},
-    {tipo:'Despesa',desc:'Fornecedor — Pães e Frios',valor:280,data:'2026-06-25',cat:'Fornecedores',status:'Pago',conta:'Conta Corrente',forma:'Pix',entidade:'Distribuidora Pão Quente',obs:''},
-    {tipo:'Despesa',desc:'Conta de Luz',valor:340,data:'2026-06-24',cat:'Utilities',status:'Pago',conta:'Conta Corrente',forma:'Boleto',entidade:'',obs:''},
-    {tipo:'Despesa',desc:'Aluguel — Junho',valor:1800,data:'2026-06-01',cat:'Aluguel',status:'Pago',conta:'Conta Corrente',forma:'Boleto',entidade:'',obs:''},
-    {tipo:'Receita',desc:'Encomenda — Festa',valor:1200,data:'2026-06-22',cat:'Encomendas',status:'Pago',conta:'Conta Digital',forma:'Pix',entidade:'',obs:''},
-    {tipo:'Despesa',desc:'Internet — Junho',valor:89,data:'2026-06-05',cat:'Utilities',status:'Vencido',conta:'Conta Corrente',forma:'Débito',entidade:'',obs:''},
-    {tipo:'Despesa',desc:'Gás de Cozinha',valor:160,data:'2026-06-15',cat:'Utilities',status:'A Pagar',conta:'Caixa Físico',forma:'Dinheiro',entidade:'',obs:''},
-  ];
-  return s.map((l,i)=>({...l,id:1000+i}));
-}
+// Seeds limpos — apenas estrutura base, sem dados fictícios
+function seedContas(){ return []; }
+function seedFuncionarios(){ return [
+  {id:1,nome:'Administrador',cargo:'Proprietário',cpf:'111.111.111-11',nascimento:'1990-01-01',
+   admissao:'',tel:'',email:'',end:'',salario:0,contrato:'Sócio',turno:'Integral',
+   status:'Ativo',perfil:'adm',pis:'',ctps:'',contaSal:'',bancoSal:'',
+   permissoes:{dashboard:true,caixa:true,'contas-banco':true,lancamentos:true,
+     'contas-pagar':true,'contas-receber':true,fluxo:true,dre:true,
+     rh:true,relatorio:true,cadastros:true},obs:''}
+]; }
+function seedFornecedores(){ return []; }
+function seedTiposRec(){ return [
+  {id:1,nome:'Alimentação',emoji:'🍔',cor:'green',desc:'Vendas de lanches e refeições'},
+  {id:2,nome:'Bebidas',emoji:'🥤',cor:'blue',desc:'Refrigerantes, sucos e água'},
+  {id:3,nome:'Encomendas',emoji:'📦',cor:'purple',desc:'Pedidos antecipados para eventos'},
+  {id:4,nome:'Delivery',emoji:'🛵',cor:'orange',desc:'Pedidos via apps de entrega'},
+  {id:5,nome:'Outros',emoji:'💰',cor:'teal',desc:'Receitas diversas'},
+]; }
+function seedTiposDesp(){ return [
+  {id:1,nome:'Fornecedores',emoji:'🏭',cor:'red',desc:'Pagamentos a fornecedores'},
+  {id:2,nome:'Salários',emoji:'👥',cor:'purple',desc:'Folha de pagamento'},
+  {id:3,nome:'Aluguel',emoji:'🏠',cor:'orange',desc:'Aluguel e condomínio'},
+  {id:4,nome:'Utilities',emoji:'⚡',cor:'blue',desc:'Luz, água, gás, internet'},
+  {id:5,nome:'Manutenção',emoji:'🔧',cor:'teal',desc:'Reparos e equipamentos'},
+  {id:6,nome:'Marketing',emoji:'📢',cor:'green',desc:'Anúncios e promoções'},
+  {id:7,nome:'Limpeza',emoji:'🧹',cor:'teal',desc:'Produtos de limpeza'},
+  {id:8,nome:'Taxas e Tarifas',emoji:'💸',cor:'red',desc:'Taxas bancárias e de processadoras'},
+  {id:9,nome:'13º Salário',emoji:'🎄',cor:'purple',desc:'Décimo terceiro salário'},
+  {id:10,nome:'Férias',emoji:'🏖️',cor:'blue',desc:'Pagamento de férias'},
+  {id:11,nome:'Rescisão',emoji:'📋',cor:'red',desc:'Verbas rescisórias'},
+  {id:12,nome:'Outros',emoji:'📋',cor:'red',desc:'Despesas diversas'},
+]; }
+function seedLancamentos(){ return []; }
 
 // ══════════════════════════════════════════════════════════════
 // LOGIN
