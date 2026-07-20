@@ -711,26 +711,78 @@ window.addEventListener('load', async () => {
   showLoading(true);
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
-    db = firebase.firestore();
-    // Habilita cache offline para funcionar mesmo sem internet
+    db   = firebase.firestore();
+    auth = firebase.auth();
+
+    // Persistência de sessão LOCAL — sobrevive ao reload e fechar aba
+    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+    // Cache offline do Firestore — funciona sem internet
     db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-      if(err.code === 'failed-precondition') console.warn('Offline persistence: múltiplas abas abertas');
-      else if(err.code === 'unimplemented') console.warn('Offline persistence não suportado neste browser');
+      if(err.code !== 'failed-precondition' && err.code !== 'unimplemented')
+        console.warn('Persistence warning:', err.code);
     });
+
+    // Autentica anonimamente no Firebase (necessário para Firestore funcionar)
+    // O login real é feito pelo CPF+senha no sistema
+    const authSnap = await auth.signInAnonymously();
+    console.log('✅ Firebase Auth anônimo:', authSnap.user.uid);
+
+    // Carrega todos os dados do Firestore
     await carregarFirestore();
     setSyncStatus('ok');
-    // Listener em tempo real para lancamentos
-    db.collection('lancamentos').onSnapshot(snap => {
-      DB.lancamentos = snap.docs.map(d => ({id: d.id, ...d.data()}));
-      updateBadge();
-      const sec = document.querySelector('.section.active');
-      if(sec) {
-        const name = sec.id.replace('sec-','');
-        if(['dashboard','caixa','lancamentos','contas-pagar','contas-receber','fluxo','dre','relatorio'].includes(name)){
-          renderSection(name);
+
+    // Listeners em tempo real — atualiza automaticamente em todos os dispositivos
+    const colsRealtime = ['lancamentos','contas','funcionarios','pgtoRH'];
+    colsRealtime.forEach(col => {
+      db.collection(col).onSnapshot(snap => {
+        DB[col] = snap.docs.map(d => {
+          const data = d.data();
+          const id = isNaN(d.id) ? d.id : parseInt(d.id);
+          return {...data, id};
+        });
+        if(col === 'lancamentos') updateBadge();
+        // Re-renderiza a tela ativa se for relevante
+        const sec = document.querySelector('.section.active');
+        if(sec){
+          const name = sec.id.replace('sec-','');
+          const relevante = {
+            lancamentos: ['dashboard','caixa','lancamentos','contas-pagar','contas-receber','fluxo','dre','relatorio'],
+            contas:      ['dashboard','caixa','contas-banco','fluxo','dre','relatorio'],
+            funcionarios:['rh'],
+            pgtoRH:      ['rh','dre','relatorio'],
+          };
+          if((relevante[col]||[]).includes(name)) renderSection(name);
         }
-      }
+      }, err => console.error(`Listener erro ${col}:`, err));
     });
+
+    // Verifica se havia sessão salva — tenta sessionStorage primeiro, depois localStorage
+    const sessaoSalva = sessionStorage.getItem('lanchonet_user') || localStorage.getItem('lanchonet_user');
+    if(sessaoSalva){
+      try{
+        const userSalvo = JSON.parse(sessaoSalva);
+        // Busca dados atualizados do funcionário no Firestore (pode ter mudado)
+        const funcAtual = (DB.funcionarios||[]).find(f => f.id === userSalvo.id && f.status === 'Ativo');
+        if(funcAtual){
+          currentUser = funcAtual;
+          // Renova a sessão com dados atualizados
+          sessionStorage.setItem('lanchonet_user', JSON.stringify(funcAtual));
+          localStorage.setItem('lanchonet_user', JSON.stringify(funcAtual));
+          showLoading(false);
+          applyPermissions(); renderSidebar(); populateContaSelects(); renderDashboard();
+          return; // entra direto, sem mostrar login
+        } else {
+          // Funcionário inativo ou removido — limpa sessão
+          sessionStorage.removeItem('lanchonet_user');
+          localStorage.removeItem('lanchonet_user');
+        }
+      } catch(e){
+        sessionStorage.removeItem('lanchonet_user');
+        localStorage.removeItem('lanchonet_user');
+      }
+    }
+
   } catch(e) {
     console.error('Firebase error:', e);
     carregarLocal();
@@ -740,15 +792,16 @@ window.addEventListener('load', async () => {
   document.getElementById('login-screen').classList.add('show');
 });
 
-// ── Persistência ──
+// ── Persistência local (fallback offline) ──
 function carregarLocal(){
-  DB.lancamentos  = load('lanc', seedLancamentos());
-  DB.contas       = load('cbanco', seedContas());
-  DB.funcionarios = load('func', seedFuncionarios());
-  DB.fornecedores = load('forn', seedFornecedores());
-  DB.tiposRec     = load('trec', seedTiposRec());
-  DB.tiposDesp    = load('tdes', seedTiposDesp());
-  DB.pgtoRH       = load('pgtoRH', []);
+  DB.lancamentos  = load('lanc',    seedLancamentos());
+  DB.contas       = load('cbanco',  seedContas());
+  DB.funcionarios = load('func',    seedFuncionarios());
+  DB.fornecedores = load('forn',    seedFornecedores());
+  DB.tiposRec     = load('trec',    seedTiposRec());
+  DB.tiposDesp    = load('tdes',    seedTiposDesp());
+  DB.pgtoRH       = load('pgtoRH',  []);
+  console.warn('⚠️ Rodando em modo offline — dados do localStorage');
 }
 
 async function salvarItemDB(col, item){
@@ -807,30 +860,52 @@ function getSeed(col){
 }
 
 async function salvarDB(col, dados){
+  // Atualiza memória imediatamente
   DB[col] = dados;
-  // Sempre salva local como backup
-  const localKey = {contas:'cbanco',tiposRec:'trec',tiposDesp:'tdes',pgtoRH:'pgtoRH'}[col] || col;
-  save(localKey, dados);
 
-  if(!DEMO_MODE && db){
+  if(db){
     setSyncStatus('syncing');
     try{
-      const batch = db.batch();
-      // Remove documentos que não existem mais
+      // Usa batches de até 500 operações (limite do Firestore)
+      const BATCH_SIZE = 400;
+      // Primeiro busca os IDs existentes para saber o que deletar
       const snap = await db.collection(col).get();
       const idsNovos = new Set(dados.map(d => String(d.id)));
-      snap.docs.forEach(d => { if(!idsNovos.has(d.id)) batch.delete(d.ref); });
+
+      // Processa em lotes
+      let batch = db.batch();
+      let ops = 0;
+
+      // Deleta documentos removidos
+      for(const doc of snap.docs){
+        if(!idsNovos.has(doc.id)){
+          batch.delete(doc.ref);
+          ops++;
+          if(ops >= BATCH_SIZE){ await batch.commit(); batch = db.batch(); ops = 0; }
+        }
+      }
+
       // Salva/atualiza cada item
-      dados.forEach(item => {
+      for(const item of dados){
         const ref = db.collection(col).doc(String(item.id));
-        batch.set(ref, item, { merge: true });
-      });
-      await batch.commit();
+        batch.set(ref, item);
+        ops++;
+        if(ops >= BATCH_SIZE){ await batch.commit(); batch = db.batch(); ops = 0; }
+      }
+
+      if(ops > 0) await batch.commit();
       setSyncStatus('ok');
     } catch(e){
       console.error('Firestore write error:', e);
       setSyncStatus('offline');
+      // Fallback: salva local se Firestore falhar
+      const localKey = {contas:'cbanco',tiposRec:'trec',tiposDesp:'tdes',pgtoRH:'pgtoRH'}[col] || col;
+      save(localKey, dados);
     }
+  } else {
+    // Modo offline: salva só local
+    const localKey = {contas:'cbanco',tiposRec:'trec',tiposDesp:'tdes',pgtoRH:'pgtoRH'}[col] || col;
+    save(localKey, dados);
   }
 }
 
@@ -878,19 +953,42 @@ let currentUser = null;
 function doLogin(){
   const user = gv('login-user').replace(/\D/g,'');
   const pass = gv('login-pass').replace(/\D/g,'');
-  document.getElementById('login-error').style.display='none';
+  const errEl = document.getElementById('login-error');
+  errEl.style.display='none';
+
+  if(!user || !pass){ errEl.textContent='Preencha o login e a senha.'; errEl.style.display='block'; return; }
+
   const found = (DB.funcionarios||[]).find(f => {
     const cpfOk = f.cpf.replace(/\D/g,'') === user;
     if(!f.nascimento) return false;
     const [y,m,d] = f.nascimento.split('-');
     return cpfOk && pass === `${d}${m}${y}` && f.status === 'Ativo';
   });
-  if(!found){ document.getElementById('login-error').style.display='block'; document.getElementById('login-pass').value=''; return; }
+
+  if(!found){
+    errEl.textContent='CPF ou senha incorretos.';
+    errEl.style.display='block';
+    document.getElementById('login-pass').value='';
+    return;
+  }
+
   currentUser = found;
+  // Salva sessão no sessionStorage — persiste durante reload, limpa ao fechar o browser
+  // Use localStorage para persistir mesmo após fechar o browser
+  sessionStorage.setItem('lanchonet_user', JSON.stringify(found));
+  localStorage.setItem('lanchonet_user', JSON.stringify(found));
+
   document.getElementById('login-screen').classList.remove('show');
   applyPermissions(); renderSidebar(); populateContaSelects(); renderDashboard();
 }
-function doLogout(){ currentUser=null; document.getElementById('login-screen').classList.add('show'); clearForm(['login-user','login-pass']); }
+
+function doLogout(){
+  currentUser = null;
+  sessionStorage.removeItem('lanchonet_user');
+  localStorage.removeItem('lanchonet_user');
+  document.getElementById('login-screen').classList.add('show');
+  clearForm(['login-user','login-pass']);
+}
 document.getElementById('login-user').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('login-pass').focus(); });
 document.getElementById('login-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 function canAccess(s){ if(!currentUser)return false; if(currentUser.perfil==='adm')return true; return !!(currentUser.permissoes||{})[s]; }
