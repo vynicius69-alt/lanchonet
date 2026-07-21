@@ -357,9 +357,9 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
     </div>
     <!-- CONTAS BANCÁRIAS -->
     <div class="section" id="sec-contas-banco">
-      <div class="card-header" style="margin-bottom:18px;"><div><div class="card-title" style="font-size:16px;">🏦 Saldos por Conta</div><div class="card-sub">Clique em uma conta para ver as movimentações</div></div><button class="btn btn-primary btn-sm" onclick="openModal('modal-conta-banco')">+ Nova Conta</button></div>
+      <div class="card-header" style="margin-bottom:18px;"><div><div class="card-title" style="font-size:16px;">🏦 Saldos por Conta</div><div class="card-sub">Clique em uma conta para ver as movimentações</div></div><button class="btn btn-primary btn-sm" onclick="abrirNovaContaBanco()">+ Nova Conta</button></div>
       <div id="banco-conta-cards" class="conta-cards"></div>
-      <div class="card" id="banco-detalhe-card" style="display:none;"><div class="card-header"><div><div class="card-title" id="banco-detalhe-titulo">—</div><div class="card-sub" id="banco-detalhe-sub">—</div></div><select class="filter-select" id="filter-banco-forma" onchange="renderBancoDetalhe()" style="font-size:12px;padding:7px 10px;"><option value="">Todas as formas</option><option>Pix</option><option>Débito</option><option>Crédito</option><option>Dinheiro</option><option>Boleto</option><option>TED/DOC</option><option>Cheque</option></select></div><div class="table-wrap" id="banco-detalhe-table"></div></div>
+      <div class="card" id="banco-detalhe-card" style="display:none;"><div class="card-header"><div><div class="card-title" id="banco-detalhe-titulo">—</div><div class="card-sub" id="banco-detalhe-sub">—</div></div><div style="display:flex;gap:8px;align-items:center;"><select class="filter-select" id="filter-banco-forma" onchange="renderBancoDetalhe()" style="font-size:12px;padding:7px 10px;"><option value="">Todas as formas</option><option>Pix</option><option>Débito</option><option>Crédito</option><option>Dinheiro</option><option>Boleto</option><option>TED/DOC</option><option>Cheque</option></select><button class="btn btn-outline btn-sm" id="banco-detalhe-edit-btn" onclick="">✏️ Editar Conta</button></div></div><div class="table-wrap" id="banco-detalhe-table"></div></div>
     </div>
     <!-- LANÇAMENTOS -->
     <div class="section" id="sec-lancamentos">
@@ -490,7 +490,7 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
         <div class="tab" onclick="cadTab('tipos-receita',this)">💹 Tipos Receita</div>
         <div class="tab" onclick="cadTab('tipos-despesa',this)">📤 Tipos Despesa</div>
       </div>
-      <div id="cad-contas-banco-cad"><div class="search-bar"><span style="flex:1;font-size:13px;color:var(--muted);align-self:center;">Gerencie suas contas bancárias e carteiras</span><button class="btn btn-primary btn-sm" onclick="openModal('modal-conta-banco')">+ Nova Conta</button></div><div class="cad-grid" id="grid-contas-banco"></div></div>
+      <div id="cad-contas-banco-cad"><div class="search-bar"><span style="flex:1;font-size:13px;color:var(--muted);align-self:center;">Gerencie suas contas bancárias e carteiras</span><button class="btn btn-primary btn-sm" onclick="abrirNovaContaBanco()">+ Nova Conta</button></div><div class="cad-grid" id="grid-contas-banco"></div></div>
       <div id="cad-fornecedores" style="display:none"><div class="search-bar"><input class="search-input" placeholder="🔍 Buscar fornecedor..." id="search-forn" oninput="renderFornecedores()"><select class="filter-select" id="filter-forn-cat" onchange="renderFornecedores()"><option value="">Todas</option><option>Alimentos</option><option>Bebidas</option><option>Descartáveis</option><option>Limpeza</option><option>Equipamentos</option><option>Outros</option></select><button class="btn btn-primary btn-sm" onclick="openModal('modal-fornecedor')">+ Novo</button></div><div class="cad-grid" id="grid-fornecedores"></div></div>
       <div id="cad-tipos-receita" style="display:none"><div class="search-bar"><input class="search-input" placeholder="🔍 Buscar..." id="search-trec" oninput="renderTiposReceita()"><button class="btn btn-success btn-sm" onclick="openModalTipo('receita')">+ Novo Tipo</button></div><div class="tipo-grid" id="grid-tipos-receita"></div></div>
       <div id="cad-tipos-despesa" style="display:none"><div class="search-bar"><input class="search-input" placeholder="🔍 Buscar..." id="search-tdes" oninput="renderTiposDespesa()"><button class="btn btn-danger btn-sm" onclick="openModalTipo('despesa')">+ Novo Tipo</button></div><div class="tipo-grid" id="grid-tipos-despesa"></div></div>
@@ -1064,7 +1064,16 @@ function openModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='modal-lancamento'){ document.getElementById('f-data').value=hoje; updateCatSelect(); updateEntidadeSelect(); populateContaSelects(); setContaFormaPadrao(); }
   if(id==='modal-transferencia'){ document.getElementById('tr-data').value=hoje; populateContaSelects(); }
-  if(id==='modal-conta-banco'){ document.getElementById('cb-edit-id').value=''; document.getElementById('mtitle-conta').textContent='Nova Conta Bancária'; clearForm(['cb-nome','cb-agencia','cb-numero','cb-saldo-ini','cb-obs']); }
+  if(id==='modal-conta-banco'){
+    // Só reseta se for abertura de NOVA conta (edit-id vazio)
+    const editId = document.getElementById('cb-edit-id').value;
+    if(!editId){
+      document.getElementById('mtitle-conta').textContent='Nova Conta Bancária';
+      clearForm(['cb-nome','cb-agencia','cb-numero','cb-saldo-ini','cb-obs']);
+      // Reseta selects para valor padrão
+      setVal({'cb-tipo':'Conta Corrente','cb-banco':'Nubank','cb-icone':'🏦','cb-cor':'#3498DB','cb-forma-padrao':'Pix'});
+    }
+  }
   if(id==='modal-funcionario'){ populateFuncContaSal(); }
 }
 function tryClose(id,wids=[]){
@@ -1123,6 +1132,9 @@ function selectContaBanco(nome){
   document.getElementById('banco-detalhe-card').style.display='block';
   document.getElementById('banco-detalhe-titulo').textContent=cb?`${cb.icone} ${cb.nome}`:nome;
   document.getElementById('banco-detalhe-sub').textContent=cb?`${cb.banco} · ${cb.tipo} · Saldo: ${fmt(saldoConta(nome))}`:'-';
+  // Aponta o botão Editar para a conta selecionada
+  const editBtn = document.getElementById('banco-detalhe-edit-btn');
+  if(editBtn && cb) editBtn.setAttribute('onclick', `editContaBanco(${cb.id})`);
   renderBancoDetalhe();
 }
 function renderBancoDetalhe(){
@@ -1139,7 +1151,24 @@ function salvarContaBanco(){
   salvarDB('contas',DB.contas); closeModal('modal-conta-banco'); populateContaSelects();
   renderSection(document.querySelector('.section.active').id.replace('sec-','')); notify(id?'Conta atualizada!':'Conta cadastrada! ✅');
 }
-function editContaBanco(id){ const cb=(DB.contas||[]).find(c=>c.id===id);if(!cb)return; document.getElementById('cb-edit-id').value=id; document.getElementById('mtitle-conta').textContent='Editar Conta'; setVal({'cb-nome':cb.nome,'cb-tipo':cb.tipo,'cb-banco':cb.banco,'cb-icone':cb.icone,'cb-agencia':cb.agencia,'cb-numero':cb.numero,'cb-saldo-ini':cb.saldoIni,'cb-cor':cb.cor,'cb-forma-padrao':cb.formaPadrao,'cb-obs':cb.obs}); openModal('modal-conta-banco'); }
+function abrirNovaContaBanco(){
+  // Garante que edit-id está vazio antes de abrir (modo criação)
+  document.getElementById('cb-edit-id').value='';
+  openModal('modal-conta-banco');
+}
+function editContaBanco(id){
+  const cb=(DB.contas||[]).find(c=>c.id===id); if(!cb)return;
+  // Seta o ID ANTES de abrir o modal, para o openModal não resetar o form
+  document.getElementById('cb-edit-id').value=id;
+  document.getElementById('mtitle-conta').textContent='Editar Conta';
+  setVal({
+    'cb-nome':cb.nome,'cb-tipo':cb.tipo,'cb-banco':cb.banco,
+    'cb-icone':cb.icone,'cb-agencia':cb.agencia,'cb-numero':cb.numero,
+    'cb-saldo-ini':cb.saldoIni,'cb-cor':cb.cor,
+    'cb-forma-padrao':cb.formaPadrao,'cb-obs':cb.obs
+  });
+  openModal('modal-conta-banco');
+}
 function deleteContaBanco(id){ const cb=(DB.contas||[]).find(c=>c.id===id);if(!cb||!confirm(`Excluir "${cb.nome}"?`))return; DB.contas=DB.contas.filter(c=>c.id!==id); salvarDB('contas',DB.contas); populateContaSelects(); renderSection(document.querySelector('.section.active').id.replace('sec-','')); notify('Conta removida'); }
 function renderCadContasBanco(){
   const g=document.getElementById('grid-contas-banco'); if(!g)return;
