@@ -567,7 +567,8 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
 </main>
 <!-- MODAL LANÇAMENTO -->
 <div class="modal-overlay" id="modal-lancamento">
-  <div class="modal"><div class="modal-header"><div class="modal-title">Novo Lançamento</div><button class="modal-close" onclick="tryClose('modal-lancamento',['f-desc','f-valor','f-obs'])">✕</button></div>
+  <div class="modal"><div class="modal-header"><div class="modal-title" id="mtitle-lancamento">Novo Lançamento</div><button class="modal-close" onclick="fecharModalLancamento()">✕</button></div>
+    <input type="hidden" id="f-lanc-edit-id">
     <div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="f-tipo" onchange="updateCatSelect()"><option value="Receita">💹 Receita</option><option value="Despesa">📤 Despesa</option></select></div>
     <div class="form-group"><label class="form-label">Descrição *</label><input class="form-input" id="f-desc" placeholder="Ex: Venda de lanche..."></div>
     <div class="form-row">
@@ -584,7 +585,7 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
     </div>
     <div class="form-group"><label class="form-label">Fornecedor / Funcionário (opcional)</label><select class="form-input" id="f-entidade"><option value="">— Nenhum —</option></select></div>
     <div class="form-group"><label class="form-label">Observação</label><input class="form-input" id="f-obs" placeholder="Informações adicionais..."></div>
-    <div class="form-actions"><button class="btn btn-outline" onclick="tryClose('modal-lancamento',['f-desc','f-valor','f-obs'])">Cancelar</button><button class="btn btn-primary" onclick="salvarLancamento()">💾 Salvar</button></div>
+    <div class="form-actions"><button class="btn btn-outline" onclick="fecharModalLancamento()">Cancelar</button><button class="btn btn-primary" onclick="salvarLancamento()">💾 <span id="btn-salvar-lanc-label">Salvar</span></button></div>
   </div>
 </div>
 <!-- MODAL TRANSFERÊNCIA -->
@@ -1114,15 +1115,22 @@ document.querySelectorAll('.modal-overlay').forEach(ov=>{
 });
 function openModal(id){
   document.getElementById(id).classList.add('open');
-  if(id==='modal-lancamento'){ document.getElementById('f-data').value=hoje; updateCatSelect(); updateEntidadeSelect(); populateContaSelects(); setContaFormaPadrao(); }
+  if(id==='modal-lancamento'){
+    // Só reseta se for modo criação (edit-id vazio)
+    const editId = document.getElementById('f-lanc-edit-id')?.value;
+    if(!editId){
+      document.getElementById('f-data').value=hoje;
+      document.getElementById('mtitle-lancamento').textContent='Novo Lançamento';
+      document.getElementById('btn-salvar-lanc-label').textContent='Salvar';
+      updateCatSelect(); updateEntidadeSelect(); populateContaSelects(); setContaFormaPadrao();
+    }
+  }
   if(id==='modal-transferencia'){ document.getElementById('tr-data').value=hoje; populateContaSelects(); }
   if(id==='modal-conta-banco'){
-    // Só reseta se for abertura de NOVA conta (edit-id vazio)
     const editId = document.getElementById('cb-edit-id').value;
     if(!editId){
       document.getElementById('mtitle-conta').textContent='Nova Conta Bancária';
       clearForm(['cb-nome','cb-agencia','cb-numero','cb-saldo-ini','cb-obs']);
-      // Reseta selects para valor padrão
       setVal({'cb-tipo':'Conta Corrente','cb-banco':'Nubank','cb-icone':'🏦','cb-cor':'#3498DB','cb-forma-padrao':'Pix'});
     }
   }
@@ -1332,18 +1340,46 @@ function renderReceber(){
 function makeTable(rows,actions=false,showConta=false){
   if(!rows.length)return'<div class="empty"><div class="empty-icon">📭</div><div>Nenhum registro encontrado</div></div>';
   const cH=showConta?'<th>Conta / Forma</th>':'';
-  const hdr=`<tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Status</th>${cH}<th>Valor</th>${actions?'<th></th>':''}</tr>`;
+  const hdr=`<tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Status</th>${cH}<th>Valor</th>${actions?'<th style="width:80px"></th>':''}</tr>`;
   const body=rows.map(l=>{
     const isT=l.tipo==='Transferência',isR=l.tipo==='Receita';
     const tipoCls=isT?'transferencia':isR?'receita':'despesa';
     const val=`<span style="color:${isT?'var(--blue)':isR?'var(--green)':'var(--red)'};font-weight:700;">${isR?'+ ':isT?'⇄ ':'- '}${fmt(l.valor)}</span>`;
     const stCls=(l.status||'').toLowerCase().replace(' ','-').replace('a-pagar','a-pagar');
     const cTd=showConta?`<td><div style="font-size:12px">${l.conta||'—'}${isT&&l.contaDestino?` → ${l.contaDestino}`:''}</div><div style="font-size:11px;color:var(--muted)">${l.forma||''}</div></td>`:'';
-    const act=actions?`<td><button class="btn btn-danger btn-sm btn-icon" onclick="deletarLanc(${l.id})">🗑</button></td>`:'';
+    // Transferências não têm edição — só exclusão
+    const act=actions?`<td><div style="display:flex;gap:4px;">${!isT?`<button class="btn btn-outline btn-sm btn-icon" title="Editar" onclick="editarLanc(${l.id})">✏️</button>`:''}
+      <button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="deletarLanc(${l.id})">🗑</button></div></td>`:'';
     return`<tr><td>${fmtDate(l.data)}</td><td>${l.desc}${l.entidade?`<div style="font-size:11px;color:var(--muted)">${l.entidade}</div>`:''}</td><td>${l.cat||'—'}</td><td><span class="pill ${tipoCls}">${l.tipo}</span></td><td><span class="pill ${stCls}">${l.status||'—'}</span></td>${cTd}<td>${val}</td>${act}</tr>`;
   }).join('');
   return`<table><thead>${hdr}</thead><tbody>${body}</tbody></table>`;
 }
+
+function editarLanc(id){
+  const l=(DB.lancamentos||[]).find(x=>x.id===id); if(!l) return;
+  // Marca o modal no modo edição
+  document.getElementById('f-lanc-edit-id').value = id;
+  document.getElementById('modal-lancamento').querySelector('.modal-title').textContent = `Editar Lançamento`;
+  // Preenche os campos com os dados atuais
+  populateContaSelects();
+  updateEntidadeSelect();
+  setVal({
+    'f-tipo':  l.tipo,
+    'f-desc':  l.desc,
+    'f-valor': l.valor,
+    'f-data':  l.data,
+    'f-status':l.status,
+    'f-obs':   l.obs||'',
+    'f-entidade': l.entidade||'',
+    'f-conta': l.conta||'',
+    'f-forma': l.forma||'',
+  });
+  updateCatSelect();
+  // Seta a categoria após atualizar o select
+  setTimeout(()=>{ setVal({'f-cat': l.cat}); }, 50);
+  document.getElementById('modal-lancamento').classList.add('open');
+}
+
 function deletarLanc(id){
   if(!confirm('Confirmar exclusão?'))return;
   DB.lancamentos=(DB.lancamentos||[]).filter(l=>l.id!==id);
@@ -1451,22 +1487,63 @@ function updateCatSelect(){ const tipo=gv('f-tipo')||'Receita'; document.getElem
 function updateEntidadeSelect(){ document.getElementById('f-entidade').innerHTML=`<option value="">— Nenhum —</option>${(DB.fornecedores||[]).filter(f=>f.status==='Ativo').map(f=>`<option>${f.nome}</option>`).join('')}${(DB.funcionarios||[]).filter(f=>f.status==='Ativo').map(f=>`<option>${f.nome}</option>`).join('')}`; }
 function setContaFormaPadrao(){ const cb=(DB.contas||[])[0]; if(!cb)return; const fc=document.getElementById('f-conta'); if(fc)fc.value=cb.nome; const ff=document.getElementById('f-forma'); if(ff)ff.value=cb.formaPadrao; }
 function updateFormaPadrao(){ const nome=gv('f-conta'); const cb=(DB.contas||[]).find(c=>c.nome===nome); if(cb){const ff=document.getElementById('f-forma');if(ff)ff.value=cb.formaPadrao;} }
-function abrirLancamentoTipo(tipo){ openModal('modal-lancamento'); document.getElementById('f-tipo').value=tipo; updateCatSelect(); }
-function salvarLancamento(){
-  const tipo=gv('f-tipo'),desc=gv('f-desc').trim(),valor=parseFloat(gv('f-valor')),data=gv('f-data');
-  if(!desc||!valor||!data){alert('Preencha descrição, valor e data.');return;}
-  const lanc={id:newId(),tipo,desc,valor,data,cat:gv('f-cat'),status:gv('f-status'),conta:gv('f-conta'),forma:gv('f-forma'),entidade:gv('f-entidade'),obs:gv('f-obs')};
-  if(!DB.lancamentos)DB.lancamentos=[];
-  DB.lancamentos.push(lanc);
-  salvarDB('lancamentos',DB.lancamentos);
+function fecharModalLancamento(){
+  const editId = gv('f-lanc-edit-id');
+  const dirty  = ['f-desc','f-valor','f-obs'].some(id=>{ const el=document.getElementById(id); return el&&el.value.trim()!==''; });
+  if(dirty && !confirm('Os dados preenchidos serão perdidos. Deseja fechar mesmo assim?')) return;
   closeModal('modal-lancamento');
-  clearForm(['f-desc','f-valor','f-obs']);
-  notify('Lançamento salvo! ✅');
+  resetModalLancamento();
+}
+function resetModalLancamento(){
+  document.getElementById('f-lanc-edit-id').value = '';
+  document.getElementById('mtitle-lancamento').textContent = 'Novo Lançamento';
+  document.getElementById('btn-salvar-lanc-label').textContent = 'Salvar';
+  clearForm(['f-desc','f-valor','f-obs','f-entidade']);
+}
+function abrirLancamentoTipo(tipo){
+  resetModalLancamento();
+  openModal('modal-lancamento');
+  document.getElementById('f-tipo').value=tipo;
+  updateCatSelect();
+}
+function salvarLancamento(){
+  const tipo=gv('f-tipo'), desc=gv('f-desc').trim(), valor=parseFloat(gv('f-valor')), data=gv('f-data');
+  if(!desc||!valor||!data){ alert('Preencha descrição, valor e data.'); return; }
+  const editId = parseInt(gv('f-lanc-edit-id'))||0;
+
+  if(editId){
+    // ── MODO EDIÇÃO ──
+    const idx = (DB.lancamentos||[]).findIndex(l=>l.id===editId);
+    if(idx === -1){ alert('Lançamento não encontrado.'); return; }
+    DB.lancamentos[idx] = {
+      ...DB.lancamentos[idx],
+      tipo, desc, valor, data,
+      cat:     gv('f-cat'),
+      status:  gv('f-status'),
+      conta:   gv('f-conta'),
+      forma:   gv('f-forma'),
+      entidade:gv('f-entidade'),
+      obs:     gv('f-obs'),
+    };
+    salvarDB('lancamentos', DB.lancamentos);
+    closeModal('modal-lancamento');
+    resetModalLancamento();
+    notify('Lançamento atualizado! ✅');
+  } else {
+    // ── MODO CRIAÇÃO ──
+    const lanc = {id:newId(),tipo,desc,valor,data,cat:gv('f-cat'),status:gv('f-status'),conta:gv('f-conta'),forma:gv('f-forma'),entidade:gv('f-entidade'),obs:gv('f-obs')};
+    if(!DB.lancamentos) DB.lancamentos=[];
+    DB.lancamentos.push(lanc);
+    salvarDB('lancamentos', DB.lancamentos);
+    closeModal('modal-lancamento');
+    resetModalLancamento();
+    notify('Lançamento salvo! ✅');
+    // Notifica ADMs sobre o novo lançamento
+    const tipoNotif = tipo === 'Receita' ? 'receita' : 'despesa';
+    const emoji = tipo === 'Receita' ? 'Nova Receita' : 'Nova Despesa';
+    criarNotificacao(tipoNotif, `${emoji} lançada`, `${desc} · ${gv('f-cat')} · ${gv('f-conta')}`, fmt(valor));
+  }
   updateBadge();
-  // Notifica ADMs sobre o novo lançamento
-  const tipoNotif = tipo === 'Receita' ? 'receita' : 'despesa';
-  const emoji = tipo === 'Receita' ? 'Nova Receita' : 'Nova Despesa';
-  criarNotificacao(tipoNotif, `${emoji} lançada`, `${desc} · ${gv('f-cat')} · ${gv('f-conta')}`, fmt(valor));
   renderSection(document.querySelector('.section.active').id.replace('sec-',''));
 }
 function salvarTransferencia(){
