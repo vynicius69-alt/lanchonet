@@ -251,7 +251,36 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
 .caixa-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
 .balance-big{font-size:32px;font-weight:800;color:var(--green);letter-spacing:-1px;margin:9px 0;}
 .caixa-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
-/* ── NOTIFICAÇÕES ── */
+/* ── IMPORTAÇÃO ── */
+.import-dropzone{border:2px dashed var(--border);border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.02);}
+.import-dropzone:hover,.import-dropzone.dragover{border-color:var(--accent);background:rgba(244,162,97,.05);}
+.import-dropzone-icon{font-size:48px;margin-bottom:14px;opacity:.6;}
+.import-dropzone h3{font-size:16px;font-weight:700;margin-bottom:6px;}
+.import-dropzone p{font-size:13px;color:var(--muted);}
+.import-preview-table{overflow-x:auto;margin-top:0;}
+.import-preview-table table{width:100%;border-collapse:collapse;font-size:13px;}
+.import-preview-table thead th{background:var(--card2);padding:10px 12px;text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;}
+.import-preview-table tbody tr{border-bottom:1px solid rgba(255,255,255,.04);transition:background .15s;}
+.import-preview-table tbody tr:hover{background:rgba(255,255,255,.03);}
+.import-preview-table tbody td{padding:10px 12px;vertical-align:middle;}
+.import-preview-table tbody tr.selected{background:rgba(244,162,97,.07);}
+.import-preview-table tbody tr.deselected{opacity:.45;}
+.origem-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.origem-desktop{background:rgba(52,152,219,.15);color:var(--blue);}
+.origem-menudino{background:rgba(155,89,182,.15);color:var(--purple);}
+.origem-ifood{background:rgba(231,76,60,.15);color:var(--red);}
+.origem-outros{background:rgba(136,136,170,.15);color:var(--muted);}
+.import-forma-select{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;cursor:pointer;width:100%;}
+.import-forma-select:focus{border-color:rgba(244,162,97,.5);}
+.import-summary-bar{display:flex;gap:12px;flex-wrap:wrap;padding:14px 18px;background:var(--card2);border-radius:12px;margin-bottom:16px;align-items:center;}
+.import-summary-item{display:flex;flex-direction:column;gap:2px;}
+.import-summary-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.import-summary-val{font-size:16px;font-weight:800;}
+.import-config-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:16px 18px;background:var(--card2);border-radius:12px;margin-bottom:16px;}
+.import-config-bar .form-group{margin:0;flex:1;min-width:160px;}
+.import-progress{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:8px;display:none;}
+.import-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:3px;transition:width .3s ease;}
+.row-checkbox{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
 .notif-btn{position:relative;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:9px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;transition:background .2s;flex-shrink:0;}
 .notif-btn:hover{background:rgba(255,255,255,.1);}
 .notif-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 4px;display:none;}
@@ -339,6 +368,7 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
     <div class="nav-item" id="nav-cadastros" onclick="goTo('cadastros',this)"><span class="nav-icon">⚙️</span>Configurações</div>
     <div class="nav-section">Relatórios</div>
     <div class="nav-item" id="nav-relatorio" onclick="goTo('relatorio',this)"><span class="nav-icon">📄</span>Relatórios</div>
+    <div class="nav-item" id="nav-importar" onclick="goTo('importar',this)"><span class="nav-icon">📥</span>Importar Planilha</div>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
@@ -563,6 +593,94 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
         <div class="card"><div class="card-header"><div class="card-title">Top Categorias de Despesa</div></div><div id="rel-top-desp"></div></div>
       </div>
     </div>
+    <!-- IMPORTAR PLANILHA -->
+    <div class="section" id="sec-importar">
+      <!-- STEP 1: dropzone -->
+      <div id="import-step-1">
+        <div class="import-dropzone" id="import-dropzone" onclick="document.getElementById('import-file-input').click()" ondragover="importDragOver(event)" ondragleave="importDragLeave(event)" ondrop="importDrop(event)">
+          <div class="import-dropzone-icon">📊</div>
+          <h3>Arraste ou clique para importar a planilha</h3>
+          <p>Formatos suportados: <strong>.xlsx</strong> — Relatório de Pedidos</p>
+          <p style="margin-top:8px;font-size:12px;color:var(--muted)">Modelo: Código · Data · Status · Cliente · Tipo · Origem · Total</p>
+          <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="importFileSelected(event)">
+        </div>
+        <div style="margin-top:16px;padding:14px;background:rgba(255,255,255,.04);border-radius:10px;font-size:12px;color:var(--muted);">
+          💡 <strong style="color:var(--accent)">Dica:</strong> Após importar, você poderá revisar cada pedido, definir a forma de pagamento e a conta destino antes de confirmar os lançamentos.
+        </div>
+      </div>
+      <!-- STEP 2: preview + config -->
+      <div id="import-step-2" style="display:none;">
+        <!-- Summary bar -->
+        <div class="import-summary-bar">
+          <div class="import-summary-item"><span class="import-summary-label">Arquivo</span><span class="import-summary-val" id="imp-filename" style="font-size:13px;color:var(--accent)">—</span></div>
+          <div style="width:1px;background:var(--border);align-self:stretch;"></div>
+          <div class="import-summary-item"><span class="import-summary-label">Total Pedidos</span><span class="import-summary-val" style="color:var(--blue)" id="imp-total-pedidos">0</span></div>
+          <div class="import-summary-item"><span class="import-summary-label">Selecionados</span><span class="import-summary-val" style="color:var(--green)" id="imp-selecionados">0</span></div>
+          <div class="import-summary-item"><span class="import-summary-label">Valor Total</span><span class="import-summary-val" style="color:var(--green)" id="imp-valor-total">R$ 0,00</span></div>
+          <div class="import-summary-item"><span class="import-summary-label">Valor Selecionado</span><span class="import-summary-val" style="color:var(--accent)" id="imp-valor-sel">R$ 0,00</span></div>
+          <div style="margin-left:auto;display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="importReset()">← Novo arquivo</button>
+            <button class="btn btn-primary btn-sm" id="imp-btn-confirmar" onclick="confirmarImportacao()">✅ Confirmar Lançamentos</button>
+          </div>
+        </div>
+        <!-- Config global -->
+        <div class="import-config-bar">
+          <div class="form-group">
+            <label class="form-label">Conta Destino (padrão para todos)</label>
+            <select class="form-input" id="imp-conta-global" onchange="aplicarContaGlobal()"><option value="">— Selecione a conta —</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Forma de Pagamento (padrão)</label>
+            <select class="form-input" id="imp-forma-global" onchange="aplicarFormaGlobal()">
+              <option value="">— Selecione —</option>
+              <option>Pix</option><option>Dinheiro</option><option>Débito</option>
+              <option>Crédito</option><option>Boleto</option><option>TED/DOC</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Categoria</label>
+            <select class="form-input" id="imp-cat-global">
+              <option>Alimentação</option><option>Bebidas</option><option>Delivery</option>
+              <option>Encomendas</option><option>Outros</option>
+            </select>
+          </div>
+          <div class="form-group" style="min-width:140px;">
+            <label class="form-label">Filtrar por Origem</label>
+            <select class="form-input" id="imp-filtro-origem" onchange="filtrarImportacao()">
+              <option value="">Todas as origens</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:2px;">
+            <label class="form-label">Seleção</label>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline btn-sm" onclick="selecionarTodos(true)">☑ Todos</button>
+              <button class="btn btn-outline btn-sm" onclick="selecionarTodos(false)">☐ Nenhum</button>
+            </div>
+          </div>
+        </div>
+        <!-- Progress bar -->
+        <div class="import-progress" id="import-progress">
+          <div class="import-progress-fill" id="import-progress-fill" style="width:0%"></div>
+        </div>
+        <!-- Tabela de preview -->
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div class="import-preview-table" id="import-preview-table" style="max-height:520px;overflow-y:auto;"></div>
+        </div>
+      </div>
+      <!-- STEP 3: sucesso -->
+      <div id="import-step-3" style="display:none;">
+        <div style="text-align:center;padding:60px 20px;">
+          <div style="font-size:64px;margin-bottom:20px;">✅</div>
+          <div style="font-size:22px;font-weight:800;margin-bottom:8px;" id="imp-sucesso-titulo">Importação concluída!</div>
+          <div style="font-size:14px;color:var(--muted);margin-bottom:28px;" id="imp-sucesso-desc">—</div>
+          <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="importReset()">📥 Importar outro arquivo</button>
+            <button class="btn btn-primary" onclick="goTo('lancamentos',document.getElementById('nav-lancamentos'))">📋 Ver Lançamentos</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </main>
 <!-- MODAL LANÇAMENTO -->
@@ -1102,7 +1220,16 @@ function goTo(sec,el){
 }
 function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('open'); }
 function renderSection(sec){
-  ({dashboard:renderDashboard,caixa:renderCaixa,'contas-banco':renderContasBanco,lancamentos:renderLancamentos,'contas-pagar':()=>renderPagar(pagar_filter),'contas-receber':renderReceber,fluxo:renderFluxo,dre:renderDRE,rh:renderRH,cadastros:()=>cadTab('contas-banco-cad',document.querySelector('#cad-tabs .tab')),relatorio:renderRelatorio})[sec]?.();
+  ({dashboard:renderDashboard,caixa:renderCaixa,'contas-banco':renderContasBanco,lancamentos:renderLancamentos,'contas-pagar':()=>renderPagar(pagar_filter),'contas-receber':renderReceber,fluxo:renderFluxo,dre:renderDRE,rh:renderRH,cadastros:()=>cadTab('contas-banco-cad',document.querySelector('#cad-tabs .tab')),relatorio:renderRelatorio,importar:renderImportar})[sec]?.();
+}
+function renderImportar(){
+  // Atualiza selects de conta ao entrar na tela
+  const contaOpts = '<option value="">— Selecione a conta —</option>' + (DB.contas||[]).map(c=>`<option>${c.nome}</option>`).join('');
+  const el = document.getElementById('imp-conta-global');
+  if(el) el.innerHTML = contaOpts;
+  const catOpts = (DB.tiposRec||[]).map(t=>`<option>${t.nome}</option>`).join('');
+  const ec = document.getElementById('imp-cat-global');
+  if(ec) ec.innerHTML = catOpts;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2040,6 +2167,348 @@ function irParaNotif(tipo){
     const navEl = document.getElementById('nav-'+sec);
     goTo(sec, navEl);
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO DE IMPORTAÇÃO DE PLANILHA
+// ══════════════════════════════════════════════════════════════
+let importRows = [];      // todos os pedidos lidos
+let importRowsVisiveis = []; // filtrados pela origem
+
+// ── pageInfo entry ──
+pageInfo['importar'] = {title:'Importar Planilha', sub:'Importe relatórios de pedidos em Excel (.xlsx)'};
+
+// ── Drag & Drop ──
+function importDragOver(e){ e.preventDefault(); document.getElementById('import-dropzone').classList.add('dragover'); }
+function importDragLeave(e){ document.getElementById('import-dropzone').classList.remove('dragover'); }
+function importDrop(e){
+  e.preventDefault();
+  document.getElementById('import-dropzone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file) processImportFile(file);
+}
+function importFileSelected(e){
+  const file = e.target.files[0];
+  if(file) processImportFile(file);
+  e.target.value = ''; // reset para permitir reimport
+}
+
+// ── Lê o arquivo xlsx com SheetJS ──
+function processImportFile(file){
+  if(!file.name.match(/\.(xlsx|xls)$/i)){
+    notify('Formato inválido. Use arquivos .xlsx', true); return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      // SheetJS via CDN (carregado dinamicamente)
+      if(typeof XLSX === 'undefined'){
+        notify('Carregando leitor de planilhas...', false);
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = () => parseXLSX(e.target.result, file.name);
+        document.head.appendChild(s);
+      } else {
+        parseXLSX(e.target.result, file.name);
+      }
+    } catch(err){ notify('Erro ao ler arquivo: ' + err.message, true); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseXLSX(arrayBuffer, fileName){
+  try {
+    const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+    if(!data.length){ notify('Planilha vazia ou formato não reconhecido.', true); return; }
+
+    // Mapeia colunas — detecta automaticamente os nomes das colunas
+    const cols = Object.keys(data[0]);
+    const findCol = (...names) => cols.find(c => names.some(n => c.toLowerCase().includes(n.toLowerCase())));
+
+    const colCodigo   = findCol('código','codigo','code','id','pedido');
+    const colData     = findCol('data abertura','data_abertura','abertura','created','data');
+    const colStatus   = findCol('status');
+    const colCliente  = findCol('cliente','customer','nome');
+    const colTipo     = findCol('tipo','type');
+    const colOrigem   = findCol('origem','origin','canal','source');
+    const colTotal    = findCol('total','valor','value','amount');
+    const colEntrega  = findCol('entrega','delivery','frete');
+
+    importRows = data.map((row, i) => {
+      const rawData = colData ? row[colData] : null;
+      let dataISO = '';
+      if(rawData instanceof Date){
+        dataISO = rawData.toISOString().split('T')[0];
+      } else if(typeof rawData === 'string' && rawData){
+        // tenta parsear string de data
+        const d = new Date(rawData);
+        if(!isNaN(d)) dataISO = d.toISOString().split('T')[0];
+        else dataISO = hoje;
+      } else { dataISO = hoje; }
+
+      const rawDataFmt = rawData instanceof Date
+        ? rawData.toLocaleString('pt-BR')
+        : (typeof rawData === 'string' ? rawData.substring(0,19).replace('T',' ') : '—');
+
+      const total = parseFloat(colTotal ? row[colTotal] : 0) || 0;
+      const entrega = parseFloat(colEntrega ? row[colEntrega] : 0) || 0;
+      const origem = (colOrigem ? String(row[colOrigem]) : '').trim() || 'Outros';
+      const status = (colStatus ? String(row[colStatus]) : '').trim();
+      const tipo   = (colTipo   ? String(row[colTipo])   : '').trim();
+      const cliente = (colCliente ? String(row[colCliente]) : '').trim();
+      const codigo  = colCodigo ? row[colCodigo] : (i+1);
+
+      return {
+        _idx: i,
+        codigo,
+        dataISO,
+        dataFmt: rawDataFmt,
+        status,
+        cliente: cliente === 'NaN' || !cliente ? '—' : cliente,
+        tipo,
+        origem,
+        total,
+        entrega,
+        // campos que o usuário vai preencher
+        conta: '',
+        forma: '',
+        cat: 'Alimentação',
+        selecionado: status.toLowerCase().includes('pago'), // pré-seleciona os pagos
+      };
+    }).filter(r => r.total > 0); // ignora linhas sem valor
+
+    if(!importRows.length){ notify('Nenhum pedido com valor encontrado na planilha.', true); return; }
+
+    document.getElementById('imp-filename').textContent = fileName;
+    document.getElementById('import-step-1').style.display = 'none';
+    document.getElementById('import-step-2').style.display = 'block';
+    document.getElementById('import-step-3').style.display = 'none';
+
+    // Preenche filtro de origens
+    const origens = [...new Set(importRows.map(r => r.origem))].sort();
+    const filtroSelect = document.getElementById('imp-filtro-origem');
+    filtroSelect.innerHTML = '<option value="">Todas as origens</option>' +
+      origens.map(o => `<option>${o}</option>`).join('');
+
+    // Preenche conta destino
+    const contaOpts = (DB.contas||[]).map(c=>`<option>${c.nome}</option>`).join('');
+    document.getElementById('imp-conta-global').innerHTML = '<option value="">— Selecione a conta —</option>' + contaOpts;
+
+    // Preenche categorias do sistema
+    const catOpts = (DB.tiposRec||[]).map(t=>`<option>${t.nome}</option>`).join('');
+    document.getElementById('imp-cat-global').innerHTML = catOpts;
+
+    importRowsVisiveis = [...importRows];
+    renderImportTable();
+    atualizarImportSummary();
+
+  } catch(err){
+    console.error(err);
+    notify('Erro ao processar planilha: ' + err.message, true);
+  }
+}
+
+// ── Renderiza tabela de preview ──
+function renderImportTable(){
+  const rows = importRowsVisiveis;
+  if(!rows.length){
+    document.getElementById('import-preview-table').innerHTML =
+      '<div class="empty"><div class="empty-icon">📭</div><div>Nenhum pedido encontrado</div></div>';
+    return;
+  }
+
+  const formaOpts = ['Pix','Dinheiro','Débito','Crédito','Boleto','TED/DOC']
+    .map(f=>`<option value="${f}">${f}</option>`).join('');
+  const contaOpts = (DB.contas||[]).map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
+
+  const html = `<table>
+    <thead><tr>
+      <th style="width:36px;"><input type="checkbox" class="row-checkbox" id="chk-all" onchange="toggleTodos(this.checked)" title="Selecionar todos" style="accent-color:var(--accent)"></th>
+      <th>#</th>
+      <th>Data / Hora</th>
+      <th>Cliente</th>
+      <th>Tipo</th>
+      <th>Origem</th>
+      <th>Forma de Pagamento</th>
+      <th>Conta Destino</th>
+      <th style="text-align:right">Valor</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r => {
+        const origemCls = r.origem.toLowerCase().includes('desktop') ? 'desktop'
+          : r.origem.toLowerCase().includes('menudino') ? 'menudino'
+          : r.origem.toLowerCase().includes('ifood') ? 'ifood' : 'outros';
+        const rowCls = r.selecionado ? 'selected' : 'deselected';
+        return `<tr class="${rowCls}" id="imp-row-${r._idx}">
+          <td><input type="checkbox" class="row-checkbox" ${r.selecionado?'checked':''} onchange="toggleRow(${r._idx},this.checked)"></td>
+          <td style="font-size:12px;color:var(--muted)">${r.codigo}</td>
+          <td style="white-space:nowrap;font-size:12px">${r.dataFmt}</td>
+          <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${r.cliente}</td>
+          <td style="font-size:12px">${r.tipo}</td>
+          <td><span class="origem-tag origem-${origemCls}">${r.origem}</span></td>
+          <td>
+            <select class="import-forma-select" onchange="setRowForma(${r._idx},this.value)">
+              <option value="">— Forma —</option>
+              ${formaOpts}
+            </select>
+          </td>
+          <td>
+            <select class="import-forma-select" onchange="setRowConta(${r._idx},this.value)">
+              <option value="">— Conta —</option>
+              ${contaOpts}
+            </select>
+          </td>
+          <td style="text-align:right;font-weight:700;color:var(--green);white-space:nowrap">
+            ${fmt(r.total)}
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+
+  document.getElementById('import-preview-table').innerHTML = html;
+  atualizarImportSummary();
+}
+
+// ── Controles de seleção ──
+function toggleRow(idx, checked){
+  const row = importRows.find(r => r._idx === idx);
+  if(row) row.selecionado = checked;
+  const tr = document.getElementById('imp-row-' + idx);
+  if(tr) tr.className = checked ? 'selected' : 'deselected';
+  atualizarImportSummary();
+}
+function toggleTodos(checked){
+  importRowsVisiveis.forEach(r => { r.selecionado = checked; });
+  renderImportTable();
+}
+function selecionarTodos(sel){ toggleTodos(sel); document.getElementById('chk-all') && (document.getElementById('chk-all').checked = sel); }
+
+// ── Aplicar valores globais ──
+function aplicarContaGlobal(){
+  const val = document.getElementById('imp-conta-global').value;
+  if(!val) return;
+  importRowsVisiveis.forEach(r => { r.conta = val; });
+  // Atualiza selects da tabela
+  document.querySelectorAll('#import-preview-table tbody tr').forEach((tr, i) => {
+    const sel = tr.querySelectorAll('select')[1];
+    if(sel) sel.value = val;
+  });
+}
+function aplicarFormaGlobal(){
+  const val = document.getElementById('imp-forma-global').value;
+  if(!val) return;
+  importRowsVisiveis.forEach(r => { r.forma = val; });
+  document.querySelectorAll('#import-preview-table tbody tr').forEach(tr => {
+    const sel = tr.querySelectorAll('select')[0];
+    if(sel) sel.value = val;
+  });
+}
+function setRowForma(idx, val){ const r = importRows.find(x=>x._idx===idx); if(r) r.forma = val; }
+function setRowConta(idx, val){ const r = importRows.find(x=>x._idx===idx); if(r) r.conta = val; }
+
+// ── Filtro por origem ──
+function filtrarImportacao(){
+  const origem = document.getElementById('imp-filtro-origem').value;
+  importRowsVisiveis = origem ? importRows.filter(r=>r.origem===origem) : [...importRows];
+  renderImportTable();
+}
+
+// ── Summary ──
+function atualizarImportSummary(){
+  const sel = importRows.filter(r=>r.selecionado);
+  const totalGeral = importRows.reduce((a,r)=>a+r.total,0);
+  const totalSel   = sel.reduce((a,r)=>a+r.total,0);
+  document.getElementById('imp-total-pedidos').textContent = importRows.length;
+  document.getElementById('imp-selecionados').textContent  = sel.length;
+  document.getElementById('imp-valor-total').textContent   = fmt(totalGeral);
+  document.getElementById('imp-valor-sel').textContent     = fmt(totalSel);
+}
+
+// ── Confirmar Importação ──
+async function confirmarImportacao(){
+  const selecionados = importRows.filter(r => r.selecionado);
+  if(!selecionados.length){ notify('Nenhum pedido selecionado.', true); return; }
+
+  // Valida conta e forma
+  const semConta = selecionados.filter(r => !r.conta);
+  const semForma = selecionados.filter(r => !r.forma);
+  if(semConta.length){
+    notify(`${semConta.length} pedido(s) sem conta destino. Preencha ou use o padrão acima.`, true); return;
+  }
+  if(semForma.length){
+    notify(`${semForma.length} pedido(s) sem forma de pagamento. Preencha ou use o padrão acima.`, true); return;
+  }
+
+  const cat = document.getElementById('imp-cat-global').value || 'Alimentação';
+  const btn = document.getElementById('imp-btn-confirmar');
+  btn.disabled = true; btn.textContent = 'Importando...';
+
+  const progBar = document.getElementById('import-progress');
+  const progFill = document.getElementById('import-progress-fill');
+  progBar.style.display = 'block';
+
+  if(!DB.lancamentos) DB.lancamentos = [];
+  const novosLanc = [];
+  let erros = 0;
+
+  for(let i = 0; i < selecionados.length; i++){
+    const r = selecionados[i];
+    try {
+      const lanc = {
+        id: newId() + i,
+        tipo: 'Receita',
+        desc: `Pedido #${r.codigo}${r.cliente && r.cliente !== '—' ? ' — ' + r.cliente : ''}`,
+        valor: r.total,
+        data: r.dataISO,
+        cat,
+        status: 'Pago',
+        conta: r.conta,
+        forma: r.forma,
+        entidade: r.origem,
+        obs: `${r.tipo}${r.cliente && r.cliente !== '—' ? ' · ' + r.cliente : ''} · Importado de planilha`,
+      };
+      DB.lancamentos.push(lanc);
+      novosLanc.push(lanc);
+    } catch(e){ erros++; }
+
+    // Atualiza barra de progresso
+    progFill.style.width = Math.round(((i+1)/selecionados.length)*100) + '%';
+    // Pequena pausa para não travar a UI
+    if(i % 10 === 0) await new Promise(r => setTimeout(r, 10));
+  }
+
+  await salvarDB('lancamentos', DB.lancamentos);
+  updateBadge();
+
+  // Notifica ADMs
+  const totalImport = selecionados.reduce((a,r)=>a+r.total,0);
+  criarNotificacao('receita', 'Planilha importada', `${novosLanc.length} pedidos · ${document.getElementById('imp-filename').textContent}`, fmt(totalImport));
+
+  btn.disabled = false;
+  btn.textContent = '✅ Confirmar Lançamentos';
+  progBar.style.display = 'none';
+
+  // Step 3 — sucesso
+  document.getElementById('import-step-2').style.display = 'none';
+  document.getElementById('import-step-3').style.display = 'block';
+  document.getElementById('imp-sucesso-titulo').textContent =
+    `${novosLanc.length} lançamento${novosLanc.length > 1 ? 's' : ''} importado${novosLanc.length > 1 ? 's' : ''}!`;
+  document.getElementById('imp-sucesso-desc').textContent =
+    `Total: ${fmt(totalImport)} · ${erros > 0 ? erros + ' erros ignorados' : 'Sem erros'}`;
+}
+
+// ── Reset ──
+function importReset(){
+  importRows = [];
+  importRowsVisiveis = [];
+  document.getElementById('import-step-1').style.display = 'block';
+  document.getElementById('import-step-2').style.display = 'none';
+  document.getElementById('import-step-3').style.display = 'none';
+  document.getElementById('import-preview-table').innerHTML = '';
 }
 
 // ══════════════════════════════════════════════════════════════
