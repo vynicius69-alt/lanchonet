@@ -2239,7 +2239,22 @@ function parseXLSX(arrayBuffer, fileName){
     const colTotal    = findCol('total') || findCol('valor total','value','amount');
     const colEntrega  = findCol('valor entrega','entrega fee','delivery fee','frete');
     // Coluna informativa de forma de pagamento (opcional — preenchida pelo operador)
-    const colFormaInfo = findCol('forma de pagamento','forma pagamento','pagamento','payment');
+    // Suporta: 'Forma de Pagamento', 'Forma de Pagto', 'Pagamento', 'Payment'
+    const colFormaInfo = findCol('forma de pagto','forma de pagamento','forma pagamento','pagamento','payment');
+
+    // Normaliza os valores vindos da planilha para os padrões do sistema
+    function normalizarForma(raw){
+      if(!raw || raw === 'NaN') return '';
+      const v = String(raw).toLowerCase().trim();
+      if(v.includes('pix'))     return 'Pix';
+      if(v.includes('débito') || v.includes('debito') || v.includes('debit')) return 'Débito';
+      if(v.includes('crédito') || v.includes('credito') || v.includes('credit')) return 'Crédito';
+      if(v.includes('dinheiro') || v.includes('cash'))   return 'Dinheiro';
+      if(v.includes('boleto'))                            return 'Boleto';
+      if(v.includes('ted') || v.includes('doc'))          return 'TED/DOC';
+      if(v.includes('ifood') || v.includes('online'))     return 'Crédito'; // iFood Online → Crédito
+      return raw; // retorna original se não reconheceu
+    }
 
     importRows = data.map((row, i) => {
       const rawData = colData ? row[colData] : null;
@@ -2264,8 +2279,9 @@ function parseXLSX(arrayBuffer, fileName){
       const tipo   = (colTipo   ? String(row[colTipo])   : '').trim();
       const cliente = (colCliente ? String(row[colCliente]) : '').trim();
       const codigo  = colCodigo ? row[colCodigo] : (i+1);
-      // Lê forma de pagamento informativa da planilha (se preenchida)
-      const formaInfo = colFormaInfo ? String(row[colFormaInfo]||'').trim() : '';
+      // Lê forma de pagamento informativa da planilha (se preenchida) e normaliza
+      const formaInfoRaw = colFormaInfo ? String(row[colFormaInfo]||'').trim() : '';
+      const formaInfo = formaInfoRaw === 'NaN' ? '' : normalizarForma(formaInfoRaw);
 
       return {
         _idx: i,
@@ -2278,7 +2294,8 @@ function parseXLSX(arrayBuffer, fileName){
         origem,
         total,
         entrega,
-        formaInfo,   // valor informativo da planilha
+        formaInfo,       // valor normalizado (usado para pré-selecionar o select)
+        formaInfoRaw,    // valor original da planilha (exibido no badge informativo)
         // campos que o usuário vai preencher — pré-preenche com formaInfo se disponível
         conta: '',
         forma: formaInfo || '',
@@ -2369,11 +2386,14 @@ function renderImportTable(){
         // Badge colorido da forma informativa da planilha
         const fKey = (r.formaInfo||'').toLowerCase().trim();
         const fCor = formaCorMap[fKey];
-        const formaBadge = r.formaInfo
+        // Exibe o valor ORIGINAL da planilha no badge (ex: "Pix Manual", "Cartão de Débito")
+        const labelExibir = r.formaInfoRaw || r.formaInfo || '';
+        const formaBadge = labelExibir
           ? `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;
               background:${fCor ? fCor.bg : 'rgba(136,136,170,.15)'};
               color:${fCor ? fCor.color : 'var(--muted)'};white-space:nowrap;"
-            >${r.formaInfo}</span>`
+              title="Normalizado para: ${r.formaInfo||'—'}"
+            >${labelExibir}</span>`
           : `<span style="color:var(--muted);font-size:11px;font-style:italic;">não informado</span>`;
 
         // Selects com valor pré-selecionado
