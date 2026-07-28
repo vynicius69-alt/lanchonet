@@ -2229,13 +2229,15 @@ function parseXLSX(arrayBuffer, fileName){
     const findCol = (...names) => cols.find(c => names.some(n => c.toLowerCase().includes(n.toLowerCase())));
 
     const colCodigo   = findCol('código','codigo','code','id','pedido');
-    const colData     = findCol('data abertura','data_abertura','abertura','created','data');
+    const colData     = findCol('data abertura','data_abertura','abertura','created');
     const colStatus   = findCol('status');
     const colCliente  = findCol('cliente','customer','nome');
     const colTipo     = findCol('tipo','type');
     const colOrigem   = findCol('origem','origin','canal','source');
-    const colTotal    = findCol('total','valor','value','amount');
-    const colEntrega  = findCol('entrega','delivery','frete');
+    // IMPORTANTE: coluna de valor principal é "Total" — não confundir com "Valor Entrega"
+    // Prioriza correspondência exata "total" antes de qualquer coisa que contenha "valor"
+    const colTotal    = findCol('total') || findCol('valor total','value','amount');
+    const colEntrega  = findCol('valor entrega','entrega fee','delivery fee','frete');
 
     importRows = data.map((row, i) => {
       const rawData = colData ? row[colData] : null;
@@ -2253,8 +2255,8 @@ function parseXLSX(arrayBuffer, fileName){
         ? rawData.toLocaleString('pt-BR')
         : (typeof rawData === 'string' ? rawData.substring(0,19).replace('T',' ') : '—');
 
-      const total = parseFloat(colTotal ? row[colTotal] : 0) || 0;
-      const entrega = parseFloat(colEntrega ? row[colEntrega] : 0) || 0;
+      const total    = parseFloat(colTotal   ? row[colTotal]   : 0) || 0;
+      const entrega  = parseFloat(colEntrega ? row[colEntrega] : 0) || 0;
       const origem = (colOrigem ? String(row[colOrigem]) : '').trim() || 'Outros';
       const status = (colStatus ? String(row[colStatus]) : '').trim();
       const tipo   = (colTipo   ? String(row[colTipo])   : '').trim();
@@ -2334,7 +2336,8 @@ function renderImportTable(){
       <th>Origem</th>
       <th>Forma de Pagamento</th>
       <th>Conta Destino</th>
-      <th style="text-align:right">Valor</th>
+      <th style="text-align:right">Taxa Entrega</th>
+      <th style="text-align:right">Valor Total</th>
     </tr></thead>
     <tbody>
       ${rows.map(r => {
@@ -2360,6 +2363,9 @@ function renderImportTable(){
               <option value="">— Conta —</option>
               ${contaOpts}
             </select>
+          </td>
+          <td style="text-align:right;font-size:12px;color:var(--muted)">
+            ${r.entrega > 0 ? fmt(r.entrega) : '—'}
           </td>
           <td style="text-align:right;font-weight:700;color:var(--green);white-space:nowrap">
             ${fmt(r.total)}
@@ -2469,7 +2475,7 @@ async function confirmarImportacao(){
         conta: r.conta,
         forma: r.forma,
         entidade: r.origem,
-        obs: `${r.tipo}${r.cliente && r.cliente !== '—' ? ' · ' + r.cliente : ''} · Importado de planilha`,
+        obs: `${r.tipo}${r.cliente && r.cliente !== '—' ? ' · ' + r.cliente : ''}${r.entrega > 0 ? ' · Taxa entrega: ' + fmt(r.entrega) : ''} · Importado de planilha`,
       };
       DB.lancamentos.push(lanc);
       novosLanc.push(lanc);
