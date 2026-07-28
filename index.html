@@ -2238,6 +2238,8 @@ function parseXLSX(arrayBuffer, fileName){
     // Prioriza correspondência exata "total" antes de qualquer coisa que contenha "valor"
     const colTotal    = findCol('total') || findCol('valor total','value','amount');
     const colEntrega  = findCol('valor entrega','entrega fee','delivery fee','frete');
+    // Coluna informativa de forma de pagamento (opcional — preenchida pelo operador)
+    const colFormaInfo = findCol('forma de pagamento','forma pagamento','pagamento','payment');
 
     importRows = data.map((row, i) => {
       const rawData = colData ? row[colData] : null;
@@ -2262,6 +2264,8 @@ function parseXLSX(arrayBuffer, fileName){
       const tipo   = (colTipo   ? String(row[colTipo])   : '').trim();
       const cliente = (colCliente ? String(row[colCliente]) : '').trim();
       const codigo  = colCodigo ? row[colCodigo] : (i+1);
+      // Lê forma de pagamento informativa da planilha (se preenchida)
+      const formaInfo = colFormaInfo ? String(row[colFormaInfo]||'').trim() : '';
 
       return {
         _idx: i,
@@ -2274,9 +2278,10 @@ function parseXLSX(arrayBuffer, fileName){
         origem,
         total,
         entrega,
-        // campos que o usuário vai preencher
+        formaInfo,   // valor informativo da planilha
+        // campos que o usuário vai preencher — pré-preenche com formaInfo se disponível
         conta: '',
-        forma: '',
+        forma: formaInfo || '',
         cat: 'Alimentação',
         selecionado: status.toLowerCase().includes('pago'), // pré-seleciona os pagos
       };
@@ -2322,18 +2327,33 @@ function renderImportTable(){
     return;
   }
 
-  const formaOpts = ['Pix','Dinheiro','Débito','Crédito','Boleto','TED/DOC']
-    .map(f=>`<option value="${f}">${f}</option>`).join('');
-  const contaOpts = (DB.contas||[]).map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
+  // Mapa de cores por forma de pagamento
+  const formaCorMap = {
+    'pix':      {bg:'rgba(46,204,113,.18)',  color:'#2ECC71'},
+    'dinheiro': {bg:'rgba(241,196,15,.18)',  color:'#D4AC0D'},
+    'débito':   {bg:'rgba(52,152,219,.18)',  color:'#3498DB'},
+    'debito':   {bg:'rgba(52,152,219,.18)',  color:'#3498DB'},
+    'crédito':  {bg:'rgba(155,89,182,.18)',  color:'#9B59B6'},
+    'credito':  {bg:'rgba(155,89,182,.18)',  color:'#9B59B6'},
+    'boleto':   {bg:'rgba(244,162,97,.18)',  color:'#F4A261'},
+    'ted/doc':  {bg:'rgba(26,188,156,.18)',  color:'#1ABC9C'},
+  };
 
   const html = `<table>
     <thead><tr>
-      <th style="width:36px;"><input type="checkbox" class="row-checkbox" id="chk-all" onchange="toggleTodos(this.checked)" title="Selecionar todos" style="accent-color:var(--accent)"></th>
+      <th style="width:36px;">
+        <input type="checkbox" class="row-checkbox" id="chk-all"
+          onchange="toggleTodos(this.checked)"
+          title="Selecionar todos" style="accent-color:var(--accent)">
+      </th>
       <th>#</th>
       <th>Data / Hora</th>
       <th>Cliente</th>
       <th>Tipo</th>
       <th>Origem</th>
+      <th title="Forma de pagamento informativa da planilha">
+        📋 Forma (planilha)
+      </th>
       <th>Forma de Pagamento</th>
       <th>Conta Destino</th>
       <th style="text-align:right">Taxa Entrega</th>
@@ -2345,26 +2365,44 @@ function renderImportTable(){
           : r.origem.toLowerCase().includes('menudino') ? 'menudino'
           : r.origem.toLowerCase().includes('ifood') ? 'ifood' : 'outros';
         const rowCls = r.selecionado ? 'selected' : 'deselected';
+
+        // Badge colorido da forma informativa da planilha
+        const fKey = (r.formaInfo||'').toLowerCase().trim();
+        const fCor = formaCorMap[fKey];
+        const formaBadge = r.formaInfo
+          ? `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;
+              background:${fCor ? fCor.bg : 'rgba(136,136,170,.15)'};
+              color:${fCor ? fCor.color : 'var(--muted)'};white-space:nowrap;"
+            >${r.formaInfo}</span>`
+          : `<span style="color:var(--muted);font-size:11px;font-style:italic;">não informado</span>`;
+
+        // Selects com valor pré-selecionado
+        const formaOptsRow = ['Pix','Dinheiro','Débito','Crédito','Boleto','TED/DOC']
+          .map(f => `<option value="${f}" ${r.forma === f ? 'selected' : ''}>${f}</option>`).join('');
+        const contaOptsRow = (DB.contas||[])
+          .map(c => `<option value="${c.nome}" ${r.conta === c.nome ? 'selected' : ''}>${c.nome}</option>`).join('');
+
         return `<tr class="${rowCls}" id="imp-row-${r._idx}">
           <td><input type="checkbox" class="row-checkbox" ${r.selecionado?'checked':''} onchange="toggleRow(${r._idx},this.checked)"></td>
-          <td style="font-size:12px;color:var(--muted)">${r.codigo}</td>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap">${r.codigo}</td>
           <td style="white-space:nowrap;font-size:12px">${r.dataFmt}</td>
-          <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${r.cliente}</td>
-          <td style="font-size:12px">${r.tipo}</td>
+          <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${r.cliente}">${r.cliente}</td>
+          <td style="font-size:12px;white-space:nowrap">${r.tipo}</td>
           <td><span class="origem-tag origem-${origemCls}">${r.origem}</span></td>
-          <td>
+          <td style="text-align:center;min-width:110px">${formaBadge}</td>
+          <td style="min-width:130px">
             <select class="import-forma-select" onchange="setRowForma(${r._idx},this.value)">
               <option value="">— Forma —</option>
-              ${formaOpts}
+              ${formaOptsRow}
             </select>
           </td>
-          <td>
+          <td style="min-width:130px">
             <select class="import-forma-select" onchange="setRowConta(${r._idx},this.value)">
               <option value="">— Conta —</option>
-              ${contaOpts}
+              ${contaOptsRow}
             </select>
           </td>
-          <td style="text-align:right;font-size:12px;color:var(--muted)">
+          <td style="text-align:right;font-size:12px;color:var(--muted);white-space:nowrap">
             ${r.entrega > 0 ? fmt(r.entrega) : '—'}
           </td>
           <td style="text-align:right;font-weight:700;color:var(--green);white-space:nowrap">
