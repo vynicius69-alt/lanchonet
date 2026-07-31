@@ -408,15 +408,42 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
   <div class="content">
     <!-- DASHBOARD -->
     <div class="section active" id="sec-dashboard">
+      <!-- KPIs realizados -->
       <div class="kpi-grid">
-        <div class="kpi-card green"><div class="kpi-icon">💵</div><div class="kpi-label">Receita do Mês</div><div class="kpi-value green" id="kpi-receita">—</div><div class="kpi-change up" id="kpi-rec-ch">—</div><div class="progress-bar"><div class="progress-fill" id="prog-rec" style="background:var(--green)"></div></div></div>
-        <div class="kpi-card red"><div class="kpi-icon">💳</div><div class="kpi-label">Despesas do Mês</div><div class="kpi-value red" id="kpi-despesa">—</div><div class="kpi-change down" id="kpi-desp-ch">—</div><div class="progress-bar"><div class="progress-fill" id="prog-desp" style="background:var(--red)"></div></div></div>
-        <div class="kpi-card blue"><div class="kpi-icon">📊</div><div class="kpi-label">Lucro Líquido</div><div class="kpi-value blue" id="kpi-lucro">—</div><div class="kpi-change" id="kpi-lucro-change">—</div><div class="progress-bar"><div class="progress-fill" id="prog-lucro" style="background:var(--blue)"></div></div></div>
-        <div class="kpi-card orange"><div class="kpi-icon">🏦</div><div class="kpi-label">Saldo Total (Contas)</div><div class="kpi-value orange" id="kpi-saldo">—</div><div class="kpi-change" id="kpi-contas-qtd">—</div></div>
+        <div class="kpi-card green">
+          <div class="kpi-icon">💵</div>
+          <div class="kpi-label">Receita Realizada (Mês)</div>
+          <div class="kpi-value green" id="kpi-receita">—</div>
+          <div class="kpi-change up" id="kpi-rec-ch">—</div>
+          <div class="progress-bar"><div class="progress-fill" id="prog-rec" style="background:var(--green)"></div></div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-icon">💳</div>
+          <div class="kpi-label">Despesas Pagas (Mês)</div>
+          <div class="kpi-value red" id="kpi-despesa">—</div>
+          <div class="kpi-change down" id="kpi-desp-ch">—</div>
+          <div class="progress-bar"><div class="progress-fill" id="prog-desp" style="background:var(--red)"></div></div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-label">Lucro Realizado</div>
+          <div class="kpi-value blue" id="kpi-lucro">—</div>
+          <div class="kpi-change" id="kpi-lucro-change">—</div>
+          <div class="progress-bar"><div class="progress-fill" id="prog-lucro" style="background:var(--blue)"></div></div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="kpi-icon">🏦</div>
+          <div class="kpi-label">Saldo Real em Conta</div>
+          <div class="kpi-value orange" id="kpi-saldo">—</div>
+          <div class="kpi-change" id="kpi-contas-qtd">—</div>
+        </div>
       </div>
+      <!-- Alertas de pendências -->
+      <div id="dash-pendencias" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;"></div>
+      <!-- Cards de contas -->
       <div id="dash-conta-cards" class="conta-cards"></div>
       <div class="charts-row">
-        <div class="card"><div class="card-header"><div><div class="card-title">Receitas × Despesas</div><div class="card-sub">Últimos 7 dias</div></div></div><div class="chart-wrap"><canvas id="chartLine"></canvas></div></div>
+        <div class="card"><div class="card-header"><div><div class="card-title">Receitas × Despesas</div><div class="card-sub">Realizadas — mês atual</div></div></div><div class="chart-wrap"><canvas id="chartLine"></canvas></div></div>
         <div class="card"><div class="card-header"><div><div class="card-title">Despesas por Categoria</div></div></div><div style="height:150px;display:flex;align-items:center;justify-content:center;"><canvas id="chartDonut"></canvas></div><div class="legend" id="legend-donut"></div></div>
       </div>
       <div class="card"><div class="card-header"><div class="card-title">Últimos Lançamentos</div><button class="btn btn-outline btn-sm" onclick="goTo('lancamentos',null)">Ver todos</button></div><div class="tx-list" id="tx-recent"></div></div>
@@ -462,11 +489,11 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
     <div class="section" id="sec-fluxo">
       <div class="search-bar" style="margin-bottom:20px;"><select class="filter-select" id="filter-conta-fluxo" onchange="renderFluxo()"><option value="">Todas as contas</option></select></div>
       <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="kpi-card green"><div class="kpi-label">Total Entradas (Mês)</div><div class="kpi-value green" id="fl-receita">—</div></div>
-        <div class="kpi-card red"><div class="kpi-label">Total Saídas (Mês)</div><div class="kpi-value red" id="fl-despesa">—</div></div>
-        <div class="kpi-card blue"><div class="kpi-label">Saldo do Período</div><div class="kpi-value blue" id="fl-saldo">—</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Entradas Realizadas (Mês)</div><div class="kpi-value green" id="fl-receita">—</div></div>
+        <div class="kpi-card red"><div class="kpi-label">Saídas Realizadas (Mês)</div><div class="kpi-value red" id="fl-despesa">—</div></div>
+        <div class="kpi-card blue"><div class="kpi-label">Saldo Real em Conta</div><div class="kpi-value blue" id="fl-saldo">—</div></div>
       </div>
-      <div class="card"><div class="card-header"><div class="card-title">Fluxo de Caixa — 10 dias</div></div><div class="chart-wrap"><canvas id="chartFluxo"></canvas></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">Fluxo de Caixa — 10 dias</div><div class="card-sub">Baseado no saldo real (lançamentos pagos)</div></div><div class="chart-wrap"><canvas id="chartFluxo"></canvas></div></div>
     </div>
     <!-- DRE -->
     <div class="section" id="sec-dre">
@@ -1271,30 +1298,71 @@ function tryClose(id,wids=[]){
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
 // ══════════════════════════════════════════════════════════════
-// CONTAS BANCÁRIAS
+// CONTAS BANCÁRIAS — saldo REAL (só Pago) e PROJETADO (todos)
 // ══════════════════════════════════════════════════════════════
-function saldoConta(nome){
-  const cb=(DB.contas||[]).find(c=>c.nome===nome); if(!cb)return 0;
-  let s=parseFloat(cb.saldoIni)||0;
+
+// Saldo REAL: só lançamentos com status 'Pago' afetam o saldo
+function saldoConta(nome, modo='real'){
+  const cb=(DB.contas||[]).find(c=>c.nome===nome); if(!cb) return 0;
+  let s = parseFloat(cb.saldoIni)||0;
   (DB.lancamentos||[]).forEach(l=>{
-    if(l.tipo==='Receita'&&l.conta===nome) s+=parseFloat(l.valor);
-    else if(l.tipo==='Despesa'&&l.conta===nome) s-=parseFloat(l.valor);
-    else if(l.tipo==='Transferência'){ if(l.conta===nome)s-=parseFloat(l.valor); if(l.contaDestino===nome)s+=parseFloat(l.valor); }
+    const pago = l.status === 'Pago';
+    const pendente = l.status === 'A Pagar' || l.status === 'Vencido' || l.status === 'Pendente';
+    // Modo real: só conta Pago
+    // Modo projetado: conta Pago + pendentes
+    const contaEsta = modo === 'real' ? pago : (pago || pendente);
+    if(!contaEsta) return;
+    if(l.tipo==='Receita'  && l.conta===nome)        s += parseFloat(l.valor);
+    else if(l.tipo==='Despesa' && l.conta===nome)    s -= parseFloat(l.valor);
+    else if(l.tipo==='Transferência'){
+      if(l.conta===nome)        s -= parseFloat(l.valor);
+      if(l.contaDestino===nome) s += parseFloat(l.valor);
+    }
   });
-  // Pagamentos RH
-  (DB.pgtoRH||[]).forEach(p=>{ if(p.conta===nome) s-=parseFloat(p.liquido||p.valor||0); });
+  // Pagamentos RH (sempre já são 'Pago')
+  (DB.pgtoRH||[]).forEach(p=>{ if(p.conta===nome) s -= parseFloat(p.liquido||p.valor||0); });
   return s;
 }
-function saldoTotal(filtro=''){
-  if(filtro)return saldoConta(filtro);
-  return (DB.contas||[]).reduce((a,c)=>a+saldoConta(c.nome),0);
+
+// Saldo total de todas as contas
+function saldoTotal(filtro='', modo='real'){
+  if(filtro) return saldoConta(filtro, modo);
+  return (DB.contas||[]).reduce((a,c)=>a+saldoConta(c.nome, modo), 0);
+}
+
+// Pendências consolidadas (a pagar e a receber)
+function calcPendencias(filtro=''){
+  const match = l => !filtro || l.conta===filtro || l.contaDestino===filtro;
+  const isPend = l => l.status==='A Pagar'||l.status==='Vencido'||l.status==='Pendente';
+  const aPagar    = (DB.lancamentos||[]).filter(l=>l.tipo==='Despesa' && isPend(l) && match(l));
+  const aReceber  = (DB.lancamentos||[]).filter(l=>l.tipo==='Receita' && isPend(l) && match(l));
+  const vencidas  = (DB.lancamentos||[]).filter(l=>l.tipo==='Despesa' && l.status==='Vencido' && match(l));
+  return {
+    totalAPagar:   aPagar.reduce((a,l)=>a+parseFloat(l.valor),0),
+    totalAReceber: aReceber.reduce((a,l)=>a+parseFloat(l.valor),0),
+    totalVencidas: vencidas.reduce((a,l)=>a+parseFloat(l.valor),0),
+    qtdAPagar:     aPagar.length,
+    qtdAReceber:   aReceber.length,
+    qtdVencidas:   vencidas.length,
+  };
 }
 const CONTA_GRAD=c=>`linear-gradient(135deg,${c}dd,${c}88)`;
 function renderContaCards(cid,sel='',clk=null){
   const el=document.getElementById(cid); if(!el)return;
   el.innerHTML=(DB.contas||[]).map(cb=>{
-    const s=saldoConta(cb.nome);
-    return`<div class="conta-card${cb.nome===sel?' selected':''}" style="background:${CONTA_GRAD(cb.cor)};color:#fff;" ${clk?`onclick="${clk}('${cb.nome.replace(/'/g,"\\'")}')"`:''}><div class="conta-card-actions"><button class="btn btn-icon" style="background:rgba(0,0,0,.3);color:#fff;font-size:12px;" onclick="event.stopPropagation();editContaBanco(${cb.id})">✏️</button><button class="btn btn-icon" style="background:rgba(0,0,0,.3);color:#fff;font-size:12px;" onclick="event.stopPropagation();deleteContaBanco(${cb.id})">🗑</button></div><div class="conta-card-icon">${cb.icone}</div><div class="conta-card-nome">${cb.nome}</div><div class="conta-card-banco">${cb.banco} · ${cb.tipo}</div><div class="conta-card-saldo" style="color:${s>=0?'#fff':'#ffaaaa'}">${fmt(s)}</div><div class="conta-card-tipo">${cb.formaPadrao} · Padrão</div></div>`;
+    const sReal = saldoConta(cb.nome,'real');
+    const sProj = saldoConta(cb.nome,'projetado');
+    const difProj = sProj - sReal; // diferença pendente
+    return`<div class="conta-card${cb.nome===sel?' selected':''}" style="background:${CONTA_GRAD(cb.cor)};color:#fff;" ${clk?`onclick="${clk}('${cb.nome.replace(/'/g,"\\'")}')"`:''}><div class="conta-card-actions"><button class="btn btn-icon" style="background:rgba(0,0,0,.3);color:#fff;font-size:12px;" onclick="event.stopPropagation();editContaBanco(${cb.id})">✏️</button><button class="btn btn-icon" style="background:rgba(0,0,0,.3);color:#fff;font-size:12px;" onclick="event.stopPropagation();deleteContaBanco(${cb.id})">🗑</button></div>
+    <div class="conta-card-icon">${cb.icone}</div>
+    <div class="conta-card-nome">${cb.nome}</div>
+    <div class="conta-card-banco">${cb.banco} · ${cb.tipo}</div>
+    <div class="conta-card-saldo" style="color:${sReal>=0?'#fff':'#ffaaaa'}" title="Saldo real (só lançamentos pagos)">${fmt(sReal)}</div>
+    <div style="font-size:11px;opacity:.75;margin-top:3px;" title="Saldo projetado (inclui pendentes)">
+      Projetado: <strong style="color:${sProj>=0?'#ffffffcc':'#ffaaaacc'}">${fmt(sProj)}</strong>
+      ${difProj!==0?`<span style="font-size:10px;opacity:.7;margin-left:4px;">(${difProj>0?'+':''}${fmt(difProj)} pend.)</span>`:''}
+    </div>
+    <div class="conta-card-tipo">${cb.formaPadrao} · Padrão</div></div>`;
   }).join('');
 }
 function populateContaSelects(){
@@ -1360,7 +1428,11 @@ function deleteContaBanco(id){ const cb=(DB.contas||[]).find(c=>c.id===id);if(!c
 function renderCadContasBanco(){
   const g=document.getElementById('grid-contas-banco'); if(!g)return;
   if(!(DB.contas||[]).length){g.innerHTML='<div class="empty"><div class="empty-icon">🏦</div><div>Nenhuma conta</div></div>';return;}
-  g.innerHTML=DB.contas.map(cb=>`<div class="cad-card"><div class="cad-avatar" style="background:${cb.cor}22;color:${cb.cor};font-size:22px;">${cb.icone}</div><div class="cad-body"><div class="cad-name">${cb.nome}</div><div class="cad-detail">${cb.banco} · ${cb.tipo}</div><div style="margin-top:5px;font-weight:700;font-size:13px;color:${saldoConta(cb.nome)>=0?'var(--green)':'var(--red)'}">${fmt(saldoConta(cb.nome))}</div></div><div class="cad-actions"><button class="btn btn-outline btn-sm btn-icon" onclick="editContaBanco(${cb.id})">✏️</button><button class="btn btn-danger btn-sm btn-icon" onclick="deleteContaBanco(${cb.id})">🗑</button></div></div>`).join('');
+  g.innerHTML=DB.contas.map(cb=>{
+    const sReal=saldoConta(cb.nome,'real');
+    const sProj=saldoConta(cb.nome,'projetado');
+    return`<div class="cad-card"><div class="cad-avatar" style="background:${cb.cor}22;color:${cb.cor};font-size:22px;">${cb.icone}</div><div class="cad-body"><div class="cad-name">${cb.nome}</div><div class="cad-detail">${cb.banco} · ${cb.tipo}</div><div style="margin-top:5px;font-weight:700;font-size:13px;color:${sReal>=0?'var(--green)':'var(--red)'}">Real: ${fmt(sReal)}</div><div style="font-size:11.5px;color:var(--muted)">Projetado: ${fmt(sProj)}</div></div><div class="cad-actions"><button class="btn btn-outline btn-sm btn-icon" onclick="editContaBanco(${cb.id})">✏️</button><button class="btn btn-danger btn-sm btn-icon" onclick="deleteContaBanco(${cb.id})">🗑</button></div></div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1372,30 +1444,85 @@ function calcKPIs(ini='',fim='',filtro=''){
     if(ini&&fim)return l.data>=ini&&l.data<=fim;
     const d=new Date(l.data+' ');return d.getMonth()===mes&&d.getFullYear()===ano;
   };
-  const match=l=>(!filtro||(l.conta===filtro||l.contaDestino===filtro));
-  const recP=(DB.lancamentos||[]).filter(l=>l.tipo==='Receita'&&inRange(l)&&match(l));
-  const despP=(DB.lancamentos||[]).filter(l=>l.tipo==='Despesa'&&inRange(l)&&match(l));
-  const totalRec=recP.reduce((a,l)=>a+parseFloat(l.valor),0);
-  const totalDesp=despP.reduce((a,l)=>a+parseFloat(l.valor),0);
-  const lucro=totalRec-totalDesp;
-  const saldo=saldoTotal(filtro);
-  const hoje_rec=(DB.lancamentos||[]).filter(l=>l.data===hoje&&l.tipo==='Receita'&&match(l)).reduce((a,l)=>a+parseFloat(l.valor),0);
-  const hoje_desp=(DB.lancamentos||[]).filter(l=>l.data===hoje&&l.tipo==='Despesa'&&match(l)).reduce((a,l)=>a+parseFloat(l.valor),0);
-  return{totalRec,totalDesp,lucro,saldo,hoje_rec,hoje_desp,recP,despP};
+  const match    = l=>!filtro||(l.conta===filtro||l.contaDestino===filtro);
+  const isPago   = l=>l.status==='Pago';
+  const isPend   = l=>l.status==='A Pagar'||l.status==='Vencido'||l.status==='Pendente';
+
+  const recP  = (DB.lancamentos||[]).filter(l=>l.tipo==='Receita'&&inRange(l)&&match(l));
+  const despP = (DB.lancamentos||[]).filter(l=>l.tipo==='Despesa'&&inRange(l)&&match(l));
+
+  // Realizados (só Pago)
+  const totalRecPago  = recP.filter(isPago).reduce((a,l)=>a+parseFloat(l.valor),0);
+  const totalDespPago = despP.filter(isPago).reduce((a,l)=>a+parseFloat(l.valor),0);
+  // Pendentes
+  const totalRecPend  = recP.filter(isPend).reduce((a,l)=>a+parseFloat(l.valor),0);
+  const totalDespPend = despP.filter(isPend).reduce((a,l)=>a+parseFloat(l.valor),0);
+  // Totais brutos (pago + pendente)
+  const totalRec  = totalRecPago  + totalRecPend;
+  const totalDesp = totalDespPago + totalDespPend;
+
+  const lucroReal      = totalRecPago  - totalDespPago;
+  const lucroProjetado = totalRec - totalDesp;
+  const saldoReal      = saldoTotal(filtro, 'real');
+  const saldoProjetado = saldoTotal(filtro, 'projetado');
+
+  const hoje_rec  = (DB.lancamentos||[]).filter(l=>l.data===hoje&&l.tipo==='Receita' &&isPago(l)&&match(l)).reduce((a,l)=>a+parseFloat(l.valor),0);
+  const hoje_desp = (DB.lancamentos||[]).filter(l=>l.data===hoje&&l.tipo==='Despesa' &&isPago(l)&&match(l)).reduce((a,l)=>a+parseFloat(l.valor),0);
+
+  return{
+    totalRec,totalDesp,
+    totalRecPago,totalDespPago,
+    totalRecPend,totalDespPend,
+    lucroReal,lucroProjetado,
+    saldoReal,saldoProjetado,
+    lucro:lucroReal,    // compat
+    saldo:saldoReal,    // compat
+    hoje_rec,hoje_desp,
+    recP,despP,
+  };
 }
 let chartLine,chartDonut;
 function renderDashboard(){
-  const k=calcKPIs();
-  document.getElementById('kpi-receita').textContent=fmt(k.totalRec);
-  document.getElementById('kpi-despesa').textContent=fmt(k.totalDesp);
-  document.getElementById('kpi-lucro').textContent=fmt(k.lucro);
-  document.getElementById('kpi-saldo').textContent=fmt(k.saldo);
-  document.getElementById('kpi-lucro-change').textContent=k.lucro>=0?'↑ Positivo':'↓ Negativo';
-  document.getElementById('kpi-lucro-change').className='kpi-change '+(k.lucro>=0?'up':'down');
-  document.getElementById('kpi-contas-qtd').textContent=`${(DB.contas||[]).length} conta${(DB.contas||[]).length!==1?'s':''} ativa${(DB.contas||[]).length!==1?'s':''}`;
+  const k    = calcKPIs();
+  const pend = calcPendencias();
+
+  // KPIs realizados
+  document.getElementById('kpi-receita').textContent      = fmt(k.totalRecPago);
+  document.getElementById('kpi-rec-ch').textContent       = `+ ${fmt(k.totalRecPend)} a receber`;
+  document.getElementById('kpi-rec-ch').className         = 'kpi-change up';
+  document.getElementById('kpi-despesa').textContent      = fmt(k.totalDespPago);
+  document.getElementById('kpi-desp-ch').textContent      = `+ ${fmt(k.totalDespPend)} a pagar`;
+  document.getElementById('kpi-desp-ch').className        = 'kpi-change down';
+  document.getElementById('kpi-lucro').textContent        = fmt(k.lucroReal);
+  document.getElementById('kpi-lucro-change').textContent = k.lucroReal>=0?`↑ Projetado: ${fmt(k.lucroProjetado)}`:`↓ Projetado: ${fmt(k.lucroProjetado)}`;
+  document.getElementById('kpi-lucro-change').className   = 'kpi-change '+(k.lucroReal>=0?'up':'down');
+  document.getElementById('kpi-saldo').textContent        = fmt(k.saldoReal);
+  document.getElementById('kpi-contas-qtd').textContent   = `Projetado: ${fmt(k.saldoProjetado)}`;
+  document.getElementById('kpi-contas-qtd').className     = 'kpi-change '+(k.saldoProjetado>=0?'up':'down');
+
+  // Painel de pendências
+  const pendEl = document.getElementById('dash-pendencias');
+  if(pendEl){
+    const alertCard = (icon, label, valor, qtd, cor, nav) =>
+      `<div onclick="goTo('${nav}',document.getElementById('nav-${nav}'))" style="background:var(--card);border:1px solid ${cor}44;border-left:3px solid ${cor};border-radius:12px;padding:16px;cursor:pointer;transition:background .2s;" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='var(--card)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:18px">${icon}</span>
+          <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600">${label}</span>
+          ${qtd>0?`<span style="margin-left:auto;background:${cor};color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px">${qtd}</span>`:''}
+        </div>
+        <div style="font-size:20px;font-weight:800;color:${cor}">${fmt(valor)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">${qtd} lançamento${qtd!==1?'s':''} pendente${qtd!==1?'s':''}</div>
+      </div>`;
+
+    pendEl.innerHTML =
+      alertCard('📥','A Receber', pend.totalAReceber, pend.qtdAReceber, 'var(--green)',  'contas-receber') +
+      alertCard('📤','A Pagar',   pend.totalAPagar,   pend.qtdAPagar,   'var(--accent)', 'contas-pagar') +
+      alertCard('⚠️','Vencidas',  pend.totalVencidas,  pend.qtdVencidas, 'var(--red)',    'contas-pagar');
+  }
+
   renderContaCards('dash-conta-cards');
   document.getElementById('tx-recent').innerHTML=[...(DB.lancamentos||[])].sort((a,b)=>new Date(b.data)-new Date(a.data)).slice(0,5).map(txItem).join('');
-  renderLineChart(); renderDonut(k.despP);
+  renderLineChart(); renderDonut(k.despP.filter(l=>l.status==='Pago'));
 }
 function txItem(l){
   const isT=l.tipo==='Transferência', isR=l.tipo==='Receita';
@@ -1429,7 +1556,11 @@ function renderDonut(despesas){
 // ══════════════════════════════════════════════════════════════
 function renderCaixa(){
   const filtro=gv('filter-caixa-conta'), k=calcKPIs('','',filtro);
-  document.getElementById('caixa-saldo').textContent=fmt(k.saldo);
+  const pend = calcPendencias(filtro);
+  document.getElementById('caixa-saldo').textContent=fmt(k.saldoReal);
+  // Linha abaixo do saldo: mostra o projetado
+  const infoEl = document.querySelector('#sec-caixa .card div[style*="color:var(--muted)"]');
+  if(infoEl) infoEl.innerHTML=`Saldo real (pagos) &nbsp;·&nbsp; Projetado: <strong style="color:var(--green)">${fmt(k.saldoProjetado)}</strong>`;
   document.getElementById('c-entrada-dia').textContent=fmt(k.hoje_rec);
   document.getElementById('c-saida-dia').textContent=fmt(k.hoje_desp);
   renderContaCards('caixa-conta-cards');
@@ -1521,13 +1652,13 @@ function updateBadge(){ document.getElementById('badge-pagar').textContent=(DB.l
 let chartFluxo;
 function renderFluxo(){
   const filtro=gv('filter-conta-fluxo'),k=calcKPIs('','',filtro);
-  document.getElementById('fl-receita').textContent=fmt(k.totalRec);
-  document.getElementById('fl-despesa').textContent=fmt(k.totalDesp);
-  document.getElementById('fl-saldo').textContent=fmt(k.lucro);
+  document.getElementById('fl-receita').textContent=fmt(k.totalRecPago);
+  document.getElementById('fl-despesa').textContent=fmt(k.totalDespPago);
+  document.getElementById('fl-saldo').textContent=fmt(k.saldoReal);
   const labels=Array.from({length:10},(_,i)=>{const d=new Date();d.setDate(d.getDate()-9+i);return d.getDate()+'/'+(d.getMonth()+1);});
   const ent=labels.map(()=>Math.floor(500+Math.random()*600));
   const sai=labels.map(()=>Math.floor(300+Math.random()*400));
-  let acum=saldoTotal(filtro); const acumArr=ent.map((e,i)=>{acum+=e-sai[i];return Math.round(acum);});
+  let acum=k.saldoReal; const acumArr=ent.map((e,i)=>{acum+=e-sai[i];return Math.round(acum);});
   const ctx=document.getElementById('chartFluxo').getContext('2d');
   if(chartFluxo)chartFluxo.destroy();
   chartFluxo=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Entradas',data:ent,backgroundColor:'rgba(46,204,113,.6)',borderRadius:6},{label:'Saídas',data:sai,backgroundColor:'rgba(231,76,60,.6)',borderRadius:6},{label:'Saldo Acum.',data:acumArr,type:'line',borderColor:'#F4A261',tension:.4,pointBackgroundColor:'#F4A261',pointRadius:4,yAxisID:'y2'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8888AA',font:{size:11}}}},scales:{x:{ticks:{color:'#8888AA'},grid:{color:'rgba(255,255,255,.03)'}},y:{ticks:{color:'#8888AA'},grid:{color:'rgba(255,255,255,.04)'}},y2:{position:'right',ticks:{color:'#F4A261'},grid:{display:false}}}}});
@@ -1542,33 +1673,106 @@ function renderDRE(){
   const ini=gv('dre-ini'),fim=gv('dre-fim'),filtro=gv('filter-conta-dre');
   if(!ini||!fim){document.getElementById('dre-content').innerHTML='<div class="empty"><div class="empty-icon">📅</div><div>Selecione o período</div></div>';return;}
   if(ini>fim){document.getElementById('dre-content').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div>Data inicial deve ser anterior à final</div></div>';return;}
+
   const k=calcKPIs(ini,fim,filtro);
-  const impostos=k.totalRec*.06,lucroLiq=k.lucro-impostos;
   const f2=s=>s.split('-').reverse().join('/');
   const label=`${f2(ini)} a ${f2(fim)}${filtro?' · '+filtro:''}`;
   document.getElementById('dre-periodo-badge').textContent=label;
   document.getElementById('dre-subtitle').textContent=`Período: ${label}`;
-  const cat_rec={},cat_desp={};
-  k.recP.forEach(l=>cat_rec[l.cat]=(cat_rec[l.cat]||0)+parseFloat(l.valor));
-  k.despP.forEach(l=>cat_desp[l.cat]=(cat_desp[l.cat]||0)+parseFloat(l.valor));
-  const linha=(t,v,cor,bold=false)=>`<div class="dre-linha${bold?' bold':''}"><span style="color:${cor||'var(--text)'}">${t}</span><span style="color:${cor||'var(--text)'};font-variant-numeric:tabular-nums">${fmt(v)}</span></div>`;
-  const margem=k.totalRec?((lucroLiq/k.totalRec)*100).toFixed(1):0;
+
+  const isPago=l=>l.status==='Pago';
+  const isPend=l=>l.status==='A Pagar'||l.status==='Vencido'||l.status==='Pendente';
+
+  const cat_rec_pago={},cat_desp_pago={},cat_rec_pend={},cat_desp_pend={};
+  k.recP.filter(isPago).forEach(l=>cat_rec_pago[l.cat]=(cat_rec_pago[l.cat]||0)+parseFloat(l.valor));
+  k.despP.filter(isPago).forEach(l=>cat_desp_pago[l.cat]=(cat_desp_pago[l.cat]||0)+parseFloat(l.valor));
+  k.recP.filter(isPend).forEach(l=>cat_rec_pend[l.cat]=(cat_rec_pend[l.cat]||0)+parseFloat(l.valor));
+  k.despP.filter(isPend).forEach(l=>cat_desp_pend[l.cat]=(cat_desp_pend[l.cat]||0)+parseFloat(l.valor));
+
+  const impPago    = k.totalRecPago*.06;
+  const impProj    = k.totalRec*.06;
+  const lucroLiqPago = k.lucroReal - impPago;
+  const lucroLiqProj = k.lucroProjetado - impProj;
+  const margem       = k.totalRecPago ? ((lucroLiqPago/k.totalRecPago)*100).toFixed(1) : 0;
+  const margemProj   = k.totalRec     ? ((lucroLiqProj/k.totalRec)*100).toFixed(1)     : 0;
+
+  const linha=(t,v,cor,bold=false)=>
+    `<div class="dre-linha${bold?' bold':''}">
+      <span style="color:${cor||'var(--text)'}">${t}</span>
+      <span style="color:${cor||'var(--text)'};font-variant-numeric:tabular-nums">${fmt(v)}</span>
+    </div>`;
+
+  const temPend = (k.totalRecPend+k.totalDespPend)>0;
+
   document.getElementById('dre-content').innerHTML=`
-    <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-      ${linha('(+) RECEITA BRUTA',k.totalRec,'var(--green)',true)}
-      ${Object.entries(cat_rec).map(([c,v])=>linha('&nbsp;&nbsp;&nbsp;└ '+c,v,'var(--muted)')).join('')}
-      ${linha('(−) Deduções',0,'var(--muted)')}
-      ${linha('= RECEITA LÍQUIDA',k.totalRec,'var(--green)',true)}
-      ${linha('(−) CUSTO / DESPESAS TOTAIS',k.totalDesp,'var(--red)',true)}
-      ${Object.entries(cat_desp).map(([c,v])=>linha('&nbsp;&nbsp;&nbsp;└ '+c,v,'var(--muted)')).join('')}
-      ${linha('= RESULTADO OPERACIONAL',k.lucro,k.lucro>=0?'var(--green)':'var(--red)',true)}
-      ${linha('(−) Impostos Estimados (6%)',impostos,'var(--muted)')}
-      <div class="dre-linha total"><span style="color:var(--accent)">= LUCRO LÍQUIDO DO PERÍODO</span><span style="color:${lucroLiq>=0?'var(--green)':'var(--red)'};font-variant-numeric:tabular-nums">${fmt(lucroLiq)}</span></div>
+    <!-- REALIZADO -->
+    <div style="padding:8px 14px;background:rgba(46,204,113,.08);border-radius:8px 8px 0 0;margin-bottom:0;">
+      <span style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px">✅ Realizado — apenas lançamentos Pagos</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;">
-      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;"><div class="kpi-label">Margem Líquida</div><div style="font-size:22px;font-weight:800;color:${parseFloat(margem)>=0?'var(--accent)':'var(--red)'}">${margem}%</div></div>
-      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;"><div class="kpi-label">Lançamentos</div><div style="font-size:22px;font-weight:800;color:var(--blue)">${k.recP.length+k.despP.length}</div></div>
-      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;"><div class="kpi-label">Saldo Atual</div><div style="font-size:22px;font-weight:800;color:var(--green)">${fmt(saldoTotal(filtro))}</div></div>
+    <div style="border:1px solid var(--border);border-radius:0 0 12px 12px;overflow:hidden;margin-bottom:16px;">
+      ${linha('(+) RECEITA REALIZADA',k.totalRecPago,'var(--green)',true)}
+      ${Object.entries(cat_rec_pago).map(([c,v])=>linha('&nbsp;&nbsp;&nbsp;└ '+c,v,'var(--muted)')).join('')}
+      ${linha('(−) DESPESAS PAGAS',k.totalDespPago,'var(--red)',true)}
+      ${Object.entries(cat_desp_pago).map(([c,v])=>linha('&nbsp;&nbsp;&nbsp;└ '+c,v,'var(--muted)')).join('')}
+      ${linha('= RESULTADO OPERACIONAL REAL',k.lucroReal,k.lucroReal>=0?'var(--green)':'var(--red)',true)}
+      ${linha('(−) Impostos Estimados (6%)',impPago,'var(--muted)')}
+      <div class="dre-linha total">
+        <span style="color:var(--accent)">= LUCRO LÍQUIDO REALIZADO</span>
+        <span style="color:${lucroLiqPago>=0?'var(--green)':'var(--red)'};font-variant-numeric:tabular-nums">${fmt(lucroLiqPago)}</span>
+      </div>
+    </div>
+
+    ${temPend?`
+    <!-- PENDÊNCIAS -->
+    <div style="padding:8px 14px;background:rgba(244,162,97,.08);border-radius:8px 8px 0 0;">
+      <span style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">⏳ Pendências — A Pagar / A Receber / Vencidas</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:0 0 12px 12px;overflow:hidden;margin-bottom:16px;">
+      ${k.totalRecPend>0?linha('(+) Receitas a Receber',k.totalRecPend,'var(--green)'):''}
+      ${Object.entries(cat_rec_pend).map(([c,v])=>linha('&nbsp;&nbsp;&nbsp;└ '+c,v,'var(--muted)')).join('')}
+      ${k.totalDespPend>0?linha('(−) Despesas a Pagar',k.totalDespPend,'var(--red)'):''}
+      ${Object.entries(cat_desp_pend).map(([c,v])=>linha('&nbsp;&nbsp;&nbsp;└ '+c,v,'var(--muted)')).join('')}
+      <div class="dre-linha bold" style="background:rgba(244,162,97,.05);">
+        <span style="color:var(--accent)">Impacto Pendente no Resultado</span>
+        <span style="color:${(k.totalRecPend-k.totalDespPend)>=0?'var(--green)':'var(--red)'};font-variant-numeric:tabular-nums">
+          ${(k.totalRecPend-k.totalDespPend)>=0?'+':''}${fmt(k.totalRecPend-k.totalDespPend)}
+        </span>
+      </div>
+    </div>`:''}
+
+    <!-- PROJETADO -->
+    <div style="padding:8px 14px;background:rgba(52,152,219,.08);border-radius:8px 8px 0 0;">
+      <span style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.5px">📈 Projetado — Realizado + Pendentes</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:0 0 12px 12px;overflow:hidden;margin-bottom:16px;">
+      ${linha('(+) Receita Total Projetada',k.totalRec,'var(--green)',true)}
+      ${linha('(−) Despesas Total Projetadas',k.totalDesp,'var(--red)',true)}
+      ${linha('= Resultado Projetado',k.lucroProjetado,k.lucroProjetado>=0?'var(--green)':'var(--red)',true)}
+      ${linha('(−) Impostos Estimados (6%)',impProj,'var(--muted)')}
+      <div class="dre-linha total">
+        <span style="color:var(--blue)">= LUCRO LÍQUIDO PROJETADO</span>
+        <span style="color:${lucroLiqProj>=0?'var(--green)':'var(--red)'};font-variant-numeric:tabular-nums">${fmt(lucroLiqProj)}</span>
+      </div>
+    </div>
+
+    <!-- RESUMO 4 CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px;">
+      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;border-top:3px solid var(--green);">
+        <div class="kpi-label">Margem Real</div>
+        <div style="font-size:20px;font-weight:800;color:${parseFloat(margem)>=0?'var(--green)':'var(--red)'}">${margem}%</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;border-top:3px solid var(--blue);">
+        <div class="kpi-label">Margem Projetada</div>
+        <div style="font-size:20px;font-weight:800;color:${parseFloat(margemProj)>=0?'var(--blue)':'var(--red)'}">${margemProj}%</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;border-top:3px solid var(--green);">
+        <div class="kpi-label">Saldo Real</div>
+        <div style="font-size:20px;font-weight:800;color:var(--green)">${fmt(saldoTotal(filtro,'real'))}</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:14px;text-align:center;border-top:3px solid var(--blue);">
+        <div class="kpi-label">Saldo Projetado</div>
+        <div style="font-size:20px;font-weight:800;color:var(--blue)">${fmt(saldoTotal(filtro,'projetado'))}</div>
+      </div>
     </div>`;
 }
 
