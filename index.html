@@ -1099,7 +1099,9 @@ async function salvarDB(col, dados){
 }
 
 // ── Utils ──
-const hoje = new Date().toISOString().split('T')[0];
+// Data de hoje sem deslocamento de fuso (local)
+const _agora = new Date();
+const hoje = `${_agora.getFullYear()}-${String(_agora.getMonth()+1).padStart(2,'0')}-${String(_agora.getDate()).padStart(2,'0')}`;
 const fmt = v => 'R$ '+parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate = s => s ? s.split('-').reverse().join('/') : '—';
 function load(k,def){ try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;} }
@@ -1532,12 +1534,53 @@ function txItem(l){
   return`<div class="tx-item"><div class="tx-icon ${cls}">${icon}</div><div class="tx-body"><div class="tx-name">${l.desc}</div><div class="tx-meta">${fmtDate(l.data)} · ${l.conta||'—'}${isT&&l.contaDestino?` → ${l.contaDestino}`:''} · ${l.forma||''}</div></div><div class="tx-amount ${valCls}">${isR?'+':isT?'⇄':'-'} ${fmt(l.valor)}</div></div>`;
 }
 function renderLineChart(){
-  const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return d.getDate()+'/'+(d.getMonth()+1);});
-  const rec=days.map(()=>Math.floor(400+Math.random()*600));
-  const des=days.map(()=>Math.floor(200+Math.random()*400));
-  const ctx=document.getElementById('chartLine').getContext('2d');
-  if(chartLine)chartLine.destroy();
-  chartLine=new Chart(ctx,{type:'line',data:{labels:days,datasets:[{label:'Receitas',data:rec,borderColor:'#2ECC71',backgroundColor:'rgba(46,204,113,.08)',tension:.4,fill:true,pointBackgroundColor:'#2ECC71',pointRadius:4},{label:'Despesas',data:des,borderColor:'#E74C3C',backgroundColor:'rgba(231,76,60,.08)',tension:.4,fill:true,pointBackgroundColor:'#E74C3C',pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8888AA',font:{size:11}}}},scales:{x:{ticks:{color:'#8888AA'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#8888AA',callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,.04)'}}}}});
+  // Gera labels dos últimos 7 dias no formato YYYY-MM-DD (para comparar) e DD/MM (para exibir)
+  const diasISO = Array.from({length:7},(_,i)=>{
+    const d = new Date();
+    d.setDate(d.getDate()-6+i);
+    return d.toISOString().split('T')[0]; // YYYY-MM-DD
+  });
+  const diasLabel = diasISO.map(iso => {
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}`;
+  });
+
+  // Soma valores reais por dia (só lançamentos Pagos)
+  const rec = diasISO.map(dia =>
+    (DB.lancamentos||[])
+      .filter(l => l.tipo==='Receita' && l.data===dia && l.status==='Pago')
+      .reduce((a,l) => a+parseFloat(l.valor), 0)
+  );
+  const des = diasISO.map(dia =>
+    (DB.lancamentos||[])
+      .filter(l => l.tipo==='Despesa' && l.data===dia && l.status==='Pago')
+      .reduce((a,l) => a+parseFloat(l.valor), 0)
+  );
+
+  const ctx = document.getElementById('chartLine').getContext('2d');
+  if(chartLine) chartLine.destroy();
+  chartLine = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: diasLabel,
+      datasets: [
+        {label:'Receitas Pagas', data:rec, borderColor:'#2ECC71', backgroundColor:'rgba(46,204,113,.08)', tension:.4, fill:true, pointBackgroundColor:'#2ECC71', pointRadius:4},
+        {label:'Despesas Pagas', data:des, borderColor:'#E74C3C', backgroundColor:'rgba(231,76,60,.08)',  tension:.4, fill:true, pointBackgroundColor:'#E74C3C', pointRadius:4},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#8888AA',font:{size:11}}},
+        tooltip:{callbacks:{label: ctx => `R$ ${ctx.parsed.y.toLocaleString('pt-BR',{minimumFractionDigits:2})}`}}
+      },
+      scales:{
+        x:{ticks:{color:'#8888AA'}, grid:{color:'rgba(255,255,255,.04)'}},
+        y:{ticks:{color:'#8888AA', callback:v=>'R$'+v.toLocaleString('pt-BR')}, grid:{color:'rgba(255,255,255,.04)'}, beginAtZero:true}
+      }
+    }
+  });
+}
 }
 function renderDonut(despesas){
   const cats={}; (despesas||[]).forEach(l=>cats[l.cat]=(cats[l.cat]||0)+parseFloat(l.valor));
@@ -2463,14 +2506,39 @@ function parseXLSX(arrayBuffer, fileName){
     importRows = data.map((row, i) => {
       const rawData = colData ? row[colData] : null;
       let dataISO = '';
+
+      // Função auxiliar: extrai data LOCAL sem deslocamento de fuso
+      // toISOString() usa UTC e pode avançar um dia em fusos negativos (ex: UTC-3)
+      const extrairDataLocal = d => {
+        const ano = d.getFullYear();
+        const mes = String(d.getMonth()+1).padStart(2,'0');
+        const dia = String(d.getDate()).padStart(2,'0');
+        return `${ano}-${mes}-${dia}`;
+      };
+
       if(rawData instanceof Date){
-        dataISO = rawData.toISOString().split('T')[0];
+        // SheetJS já aplica o fuso corretamente quando cellDates:true
+        // Mas toISOString() converte para UTC — usar componentes locais
+        dataISO = extrairDataLocal(rawData);
       } else if(typeof rawData === 'string' && rawData){
-        // tenta parsear string de data
-        const d = new Date(rawData);
-        if(!isNaN(d)) dataISO = d.toISOString().split('T')[0];
-        else dataISO = hoje;
-      } else { dataISO = hoje; }
+        // String de data — parseia sem converter para UTC
+        // Formatos: "2026-07-30 23:30:00", "2026-07-30T23:30:00", "30/07/2026"
+        let d = null;
+        const strLimpa = rawData.trim();
+        // Formato ISO com hora: "2026-07-30 23:30:00"
+        const mISO = strLimpa.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if(mISO){
+          d = new Date(parseInt(mISO[1]), parseInt(mISO[2])-1, parseInt(mISO[3]));
+        }
+        // Formato BR: "30/07/2026"
+        const mBR = strLimpa.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if(!d && mBR){
+          d = new Date(parseInt(mBR[3]), parseInt(mBR[2])-1, parseInt(mBR[1]));
+        }
+        dataISO = (d && !isNaN(d)) ? extrairDataLocal(d) : hoje;
+      } else {
+        dataISO = hoje;
+      }
 
       const rawDataFmt = rawData instanceof Date
         ? rawData.toLocaleString('pt-BR')
