@@ -251,7 +251,20 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
 .caixa-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
 .balance-big{font-size:32px;font-weight:800;color:var(--green);letter-spacing:-1px;margin:9px 0;}
 .caixa-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
-/* ── IMPORTAÇÃO ── */
+/* ── QR CODE NF-e ── */
+.qr-btn{background:rgba(52,152,219,.15);border:1px solid rgba(52,152,219,.3);color:var(--blue);border-radius:9px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
+.qr-btn:hover{background:rgba(52,152,219,.25);}
+.qr-scanner-area{background:rgba(0,0,0,.5);border-radius:12px;padding:16px;margin-bottom:14px;display:none;position:relative;}
+.qr-scanner-area.active{display:block;}
+.qr-video-wrap{position:relative;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:4/3;max-height:220px;}
+.qr-video-wrap video{width:100%;height:100%;object-fit:cover;}
+.qr-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.qr-frame{width:55%;aspect-ratio:1;border:3px solid var(--accent);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);}
+.qr-scan-line{position:absolute;left:22.5%;width:55%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:qr-scan 2s linear infinite;}
+@keyframes qr-scan{0%{top:22.5%;}100%{top:77.5%;}}
+.qr-status{font-size:12px;color:var(--muted);text-align:center;margin-top:10px;}
+.qr-result-bar{background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--green);margin-bottom:14px;display:none;}
+.qr-result-bar.active{display:flex;align-items:center;gap:10px;}
 .import-dropzone{border:2px dashed var(--border);border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.02);}
 .import-dropzone:hover,.import-dropzone.dragover{border-color:var(--accent);background:rgba(244,162,97,.05);}
 .import-dropzone-icon{font-size:48px;margin-bottom:14px;opacity:.6;}
@@ -714,6 +727,40 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
 <div class="modal-overlay" id="modal-lancamento">
   <div class="modal"><div class="modal-header"><div class="modal-title" id="mtitle-lancamento">Novo Lançamento</div><button class="modal-close" onclick="fecharModalLancamento()">✕</button></div>
     <input type="hidden" id="f-lanc-edit-id">
+
+    <!-- Botão QR Code NF-e -->
+    <div style="margin-bottom:14px;">
+      <button class="qr-btn" onclick="toggleQRScanner()" id="qr-toggle-btn">
+        📷 Ler QR Code da NF-e
+      </button>
+      <span style="font-size:11px;color:var(--muted);margin-left:10px;">Aponte para o QR Code da nota fiscal para preencher automaticamente</span>
+    </div>
+
+    <!-- Área do scanner -->
+    <div class="qr-scanner-area" id="qr-scanner-area">
+      <div class="qr-video-wrap">
+        <video id="qr-video" playsinline muted></video>
+        <div class="qr-overlay">
+          <div class="qr-frame"></div>
+          <div class="qr-scan-line"></div>
+        </div>
+      </div>
+      <div class="qr-status" id="qr-status">📷 Posicione o QR Code da NF-e dentro do quadro</div>
+      <div style="text-align:center;margin-top:10px;">
+        <button class="btn btn-danger btn-sm" onclick="stopQRScanner()">✕ Fechar câmera</button>
+      </div>
+    </div>
+
+    <!-- Resultado do QR Code -->
+    <div class="qr-result-bar" id="qr-result-bar">
+      <span style="font-size:18px">✅</span>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px" id="qr-result-titulo">NF-e lida com sucesso</div>
+        <div style="font-size:11px;color:var(--muted)" id="qr-result-desc">—</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="limparQRResult()">Limpar</button>
+    </div>
+
     <div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="f-tipo" onchange="updateCatSelect()"><option value="Receita">💹 Receita</option><option value="Despesa">📤 Despesa</option></select></div>
     <div class="form-group"><label class="form-label">Descrição *</label><input class="form-input" id="f-desc" placeholder="Ex: Venda de lanche..."></div>
     <div class="form-row">
@@ -897,30 +944,41 @@ function setSyncStatus(status){
 // ── Inicialização ──
 window.addEventListener('load', async () => {
   showLoading(true);
+
+  // Timeout de segurança — se Firebase travar por mais de 8s, cai no modo offline
+  const timeoutId = setTimeout(() => {
+    console.warn('⏱ Firebase timeout — iniciando modo offline');
+    carregarLocal();
+    setSyncStatus('offline');
+    showLoading(false);
+    document.getElementById('login-screen').classList.add('show');
+  }, 8000);
+
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
+    // Inicializa Firebase apenas uma vez
+    if(!firebase.apps.length){
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
     db   = firebase.firestore();
     auth = firebase.auth();
 
-    // Persistência de sessão LOCAL — sobrevive ao reload e fechar aba
-    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    // Cache offline — não aguarda (não bloqueia o init)
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
-    // Cache offline do Firestore — funciona sem internet
-    db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-      if(err.code !== 'failed-precondition' && err.code !== 'unimplemented')
-        console.warn('Persistence warning:', err.code);
-    });
+    // Autenticação anônima com timeout individual
+    const authPromise = auth.signInAnonymously();
+    const authTimeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('Auth timeout')), 6000));
+    await Promise.race([authPromise, authTimeout]);
 
-    // Autentica anonimamente no Firebase (necessário para Firestore funcionar)
-    // O login real é feito pelo CPF+senha no sistema
-    const authSnap = await auth.signInAnonymously();
-    console.log('✅ Firebase Auth anônimo:', authSnap.user.uid);
+    // Carrega dados do Firestore com timeout individual
+    const loadPromise = carregarFirestore();
+    const loadTimeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('Firestore timeout')), 6000));
+    await Promise.race([loadPromise, loadTimeout]);
 
-    // Carrega todos os dados do Firestore
-    await carregarFirestore();
+    clearTimeout(timeoutId);
     setSyncStatus('ok');
 
-    // Listeners em tempo real — atualiza automaticamente em todos os dispositivos
+    // Listeners em tempo real
     const colsRealtime = ['lancamentos','contas','funcionarios','pgtoRH'];
     colsRealtime.forEach(col => {
       db.collection(col).onSnapshot(snap => {
@@ -930,7 +988,6 @@ window.addEventListener('load', async () => {
           return {...data, id};
         });
         if(col === 'lancamentos') updateBadge();
-        // Re-renderiza a tela ativa se for relevante
         const sec = document.querySelector('.section.active');
         if(sec){
           const name = sec.id.replace('sec-','');
@@ -942,27 +999,24 @@ window.addEventListener('load', async () => {
           };
           if((relevante[col]||[]).includes(name)) renderSection(name);
         }
-      }, err => console.error(`Listener erro ${col}:`, err));
+      }, err => console.warn(`Listener erro ${col}:`, err));
     });
 
-    // Verifica se havia sessão salva — tenta sessionStorage primeiro, depois localStorage
+    // Verifica sessão salva
     const sessaoSalva = sessionStorage.getItem('lanchonet_user') || localStorage.getItem('lanchonet_user');
     if(sessaoSalva){
       try{
         const userSalvo = JSON.parse(sessaoSalva);
-        // Busca dados atualizados do funcionário no Firestore (pode ter mudado)
         const funcAtual = (DB.funcionarios||[]).find(f => f.id === userSalvo.id && f.status === 'Ativo');
         if(funcAtual){
           currentUser = funcAtual;
-          // Renova a sessão com dados atualizados
           sessionStorage.setItem('lanchonet_user', JSON.stringify(funcAtual));
           localStorage.setItem('lanchonet_user', JSON.stringify(funcAtual));
           showLoading(false);
           applyPermissions(); renderSidebar(); populateContaSelects(); renderDashboard();
-          iniciarListenerNotificacoes(); // retoma listener após reload
-          return; // entra direto, sem mostrar login
+          iniciarListenerNotificacoes();
+          return;
         } else {
-          // Funcionário inativo ou removido — limpa sessão
           sessionStorage.removeItem('lanchonet_user');
           localStorage.removeItem('lanchonet_user');
         }
@@ -973,10 +1027,13 @@ window.addEventListener('load', async () => {
     }
 
   } catch(e) {
-    console.error('Firebase error:', e);
-    carregarLocal();
+    clearTimeout(timeoutId);
+    console.error('Firebase error:', e.message);
+    // Se Firestore falhou mas auth funcionou, tenta usar dados locais como fallback
+    if(!DB.funcionarios || !DB.funcionarios.length) carregarLocal();
     setSyncStatus('offline');
   }
+
   showLoading(false);
   document.getElementById('login-screen').classList.add('show');
 });
@@ -1099,7 +1156,9 @@ async function salvarDB(col, dados){
 }
 
 // ── Utils ──
-const hoje = new Date().toISOString().split('T')[0];
+// Data de hoje sem deslocamento de fuso (local)
+const _agora = new Date();
+const hoje = `${_agora.getFullYear()}-${String(_agora.getMonth()+1).padStart(2,'0')}-${String(_agora.getDate()).padStart(2,'0')}`;
 const fmt = v => 'R$ '+parseFloat(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate = s => s ? s.split('-').reverse().join('/') : '—';
 function load(k,def){ try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch{return def;} }
@@ -1532,12 +1591,94 @@ function txItem(l){
   return`<div class="tx-item"><div class="tx-icon ${cls}">${icon}</div><div class="tx-body"><div class="tx-name">${l.desc}</div><div class="tx-meta">${fmtDate(l.data)} · ${l.conta||'—'}${isT&&l.contaDestino?` → ${l.contaDestino}`:''} · ${l.forma||''}</div></div><div class="tx-amount ${valCls}">${isR?'+':isT?'⇄':'-'} ${fmt(l.valor)}</div></div>`;
 }
 function renderLineChart(){
-  const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return d.getDate()+'/'+(d.getMonth()+1);});
-  const rec=days.map(()=>Math.floor(400+Math.random()*600));
-  const des=days.map(()=>Math.floor(200+Math.random()*400));
-  const ctx=document.getElementById('chartLine').getContext('2d');
-  if(chartLine)chartLine.destroy();
-  chartLine=new Chart(ctx,{type:'line',data:{labels:days,datasets:[{label:'Receitas',data:rec,borderColor:'#2ECC71',backgroundColor:'rgba(46,204,113,.08)',tension:.4,fill:true,pointBackgroundColor:'#2ECC71',pointRadius:4},{label:'Despesas',data:des,borderColor:'#E74C3C',backgroundColor:'rgba(231,76,60,.08)',tension:.4,fill:true,pointBackgroundColor:'#E74C3C',pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8888AA',font:{size:11}}}},scales:{x:{ticks:{color:'#8888AA'},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#8888AA',callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,.04)'}}}}});
+  // Gera datas dos últimos 7 dias usando componentes LOCAIS (sem bug de fuso UTC)
+  const diasISO = Array.from({length:7},(_,i)=>{
+    const d = new Date();
+    d.setDate(d.getDate()-6+i);
+    const ano = d.getFullYear();
+    const mes = String(d.getMonth()+1).padStart(2,'0');
+    const dia = String(d.getDate()).padStart(2,'0');
+    return `${ano}-${mes}-${dia}`;
+  });
+  const diasLabel = diasISO.map(iso => {
+    const [,m,d] = iso.split('-');
+    return `${parseInt(d)}/${parseInt(m)}`;
+  });
+
+  // Soma valores reais por dia — só lançamentos Pagos
+  const lancs = DB.lancamentos || [];
+  const rec = diasISO.map(dia =>
+    lancs.filter(l => l.tipo==='Receita' && l.data===dia && l.status==='Pago')
+         .reduce((a,l) => a+parseFloat(l.valor||0), 0)
+  );
+  const des = diasISO.map(dia =>
+    lancs.filter(l => l.tipo==='Despesa' && l.data===dia && l.status==='Pago')
+         .reduce((a,l) => a+parseFloat(l.valor||0), 0)
+  );
+
+  // Se todos os valores são zero, mostra estado vazio em vez de gráfico
+  const temDados = rec.some(v=>v>0) || des.some(v=>v>0);
+  const ctx = document.getElementById('chartLine').getContext('2d');
+  if(chartLine){ chartLine.destroy(); chartLine = null; }
+
+  if(!temDados){
+    // Limpa o canvas e exibe mensagem
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = '#8888AA';
+    ctx.font = '14px Segoe UI, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nenhum lançamento pago nos últimos 7 dias', ctx.canvas.width/2, ctx.canvas.height/2);
+    return;
+  }
+
+  chartLine = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: diasLabel,
+      datasets: [
+        {
+          label:'Receitas Pagas',
+          data: rec,
+          borderColor:'#2ECC71',
+          backgroundColor:'rgba(46,204,113,.08)',
+          tension:.4, fill:true,
+          pointBackgroundColor:'#2ECC71',
+          pointRadius: rec.map(v => v>0?5:3),
+          pointStyle: rec.map(v => v>0?'circle':'crossRot'),
+        },
+        {
+          label:'Despesas Pagas',
+          data: des,
+          borderColor:'#E74C3C',
+          backgroundColor:'rgba(231,76,60,.08)',
+          tension:.4, fill:true,
+          pointBackgroundColor:'#E74C3C',
+          pointRadius: des.map(v => v>0?5:3),
+          pointStyle: des.map(v => v>0?'circle':'crossRot'),
+        },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#8888AA',font:{size:11}}},
+        tooltip:{
+          callbacks:{
+            label: ctx => `R$ ${ctx.parsed.y.toLocaleString('pt-BR',{minimumFractionDigits:2})}`,
+            afterLabel: ctx => ctx.parsed.y===0 ? 'Sem lançamentos' : '',
+          }
+        }
+      },
+      scales:{
+        x:{ticks:{color:'#8888AA'}, grid:{color:'rgba(255,255,255,.04)'}},
+        y:{
+          ticks:{color:'#8888AA', callback:v=>'R$'+v.toLocaleString('pt-BR')},
+          grid:{color:'rgba(255,255,255,.04)'},
+          beginAtZero:true
+        }
+      }
+    }
+  });
 }
 function renderDonut(despesas){
   const cats={}; (despesas||[]).forEach(l=>cats[l.cat]=(cats[l.cat]||0)+parseFloat(l.valor));
@@ -2374,7 +2515,365 @@ function irParaNotif(tipo){
 }
 
 // ══════════════════════════════════════════════════════════════
-// MÓDULO DE IMPORTAÇÃO DE PLANILHA
+// LEITOR DE QR CODE NF-e
+// ══════════════════════════════════════════════════════════════
+let qrStream       = null;  // stream da câmera
+let qrAnimFrame    = null;  // requestAnimationFrame ID
+let qrBarcodeAPI   = false; // suporte nativo à BarcodeDetector API
+let qrJsLibLoaded  = false; // jsQR carregado
+let qrCache        = {};    // cache: chave_acesso → dados já consultados
+
+// ── Abre/fecha o scanner ──
+function toggleQRScanner(){
+  const area = document.getElementById('qr-scanner-area');
+  if(area.classList.contains('active')){
+    stopQRScanner();
+  } else {
+    startQRScanner();
+  }
+}
+
+async function startQRScanner(){
+  const area   = document.getElementById('qr-scanner-area');
+  const video  = document.getElementById('qr-video');
+  const status = document.getElementById('qr-status');
+  const btn    = document.getElementById('qr-toggle-btn');
+
+  // Verifica suporte à câmera
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    notify('Câmera não suportada neste navegador.', true);
+    return;
+  }
+
+  try {
+    // Prefere câmera traseira em mobile
+    qrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = qrStream;
+    await video.play();
+    area.classList.add('active');
+    btn.textContent = '📷 Fechar câmera';
+    status.textContent = '📷 Posicione o QR Code da NF-e dentro do quadro...';
+
+    // Verifica se o navegador suporta BarcodeDetector (Chrome/Android nativo)
+    if('BarcodeDetector' in window){
+      qrBarcodeAPI = true;
+      status.textContent = '✅ Câmera pronta — posicione o QR Code';
+      scanLoopNative(video);
+    } else {
+      // Carrega jsQR como fallback
+      await carregarJsQR();
+      scanLoopJsQR(video);
+    }
+  } catch(e){
+    notify('Não foi possível acessar a câmera. Verifique as permissões.', true);
+    console.error('QR Cam error:', e);
+  }
+}
+
+function stopQRScanner(){
+  if(qrStream){ qrStream.getTracks().forEach(t=>t.stop()); qrStream=null; }
+  if(qrAnimFrame){ cancelAnimationFrame(qrAnimFrame); qrAnimFrame=null; }
+  const area = document.getElementById('qr-scanner-area');
+  area.classList.remove('active');
+  const btn = document.getElementById('qr-toggle-btn');
+  btn.textContent = '📷 Ler QR Code da NF-e';
+  const video = document.getElementById('qr-video');
+  video.srcObject = null;
+}
+
+// ── Loop com BarcodeDetector (nativo, mais rápido) ──
+async function scanLoopNative(video){
+  const detector = new BarcodeDetector({ formats: ['qr_code'] });
+  const loop = async () => {
+    if(!qrStream){ return; }
+    try {
+      const codes = await detector.detect(video);
+      if(codes.length > 0){
+        await processarQRCode(codes[0].rawValue);
+        return; // para o loop após leitura
+      }
+    } catch(e){}
+    qrAnimFrame = requestAnimationFrame(loop);
+  };
+  qrAnimFrame = requestAnimationFrame(loop);
+}
+
+// ── Loop com jsQR (fallback para Safari/Firefox) ──
+async function carregarJsQR(){
+  if(qrJsLibLoaded) return;
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
+    s.onload = () => { qrJsLibLoaded = true; res(); };
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function scanLoopJsQR(video){
+  const canvas = document.createElement('canvas');
+  const ctx2   = canvas.getContext('2d');
+  const loop = () => {
+    if(!qrStream || video.readyState !== video.HAVE_ENOUGH_DATA){
+      qrAnimFrame = requestAnimationFrame(loop); return;
+    }
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx2.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx2.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+    if(code){
+      processarQRCode(code.data);
+      return;
+    }
+    qrAnimFrame = requestAnimationFrame(loop);
+  };
+  qrAnimFrame = requestAnimationFrame(loop);
+}
+
+// ── Processa a URL lida ──
+async function processarQRCode(rawValue){
+  stopQRScanner();
+  const status = document.getElementById('qr-status');
+
+  // Valida se é URL de NF-e/NFC-e da SEFAZ
+  if(!rawValue || !rawValue.includes('sefaz') && !rawValue.includes('nfe') && !rawValue.includes('nfce')){
+    // Pode ser apenas o valor numérico — verifica se tem 44 dígitos (chave de acesso)
+    const apenasNumeros = rawValue.replace(/\D/g,'');
+    if(apenasNumeros.length !== 44){
+      notify('QR Code não reconhecido como NF-e. Tente novamente.', true);
+      return;
+    }
+  }
+
+  notify('QR Code lido! Buscando dados da nota...');
+  document.getElementById('qr-result-bar').classList.remove('active');
+
+  // Extrai chave de acesso da URL (parâmetro chNFe ou p= ou parte do path)
+  let chaveAcesso = '';
+  try {
+    const url = new URL(rawValue);
+    chaveAcesso = url.searchParams.get('chNFe')
+      || url.searchParams.get('p')?.split('|')[0]
+      || url.searchParams.get('nfe')
+      || rawValue.replace(/\D/g,'').substring(0,44);
+  } catch(e){
+    // Não é URL — pode ser a chave diretamente
+    chaveAcesso = rawValue.replace(/\D/g,'').substring(0,44);
+  }
+
+  // Cache — não consulta a mesma nota duas vezes
+  if(qrCache[chaveAcesso]){
+    aplicarDadosNFe(qrCache[chaveAcesso]);
+    notify('Dados da nota carregados do cache! ✅');
+    return;
+  }
+
+  // Consulta a NF-e via CORS proxy + SEFAZ
+  await consultarNFe(rawValue, chaveAcesso);
+}
+
+// ── Consulta dados da NF-e ──
+async function consultarNFe(urlOriginal, chaveAcesso){
+  const statusEl = document.getElementById('qr-status');
+
+  // Tenta extrair dados diretamente da URL (muitas NF-e têm dados na própria URL)
+  const dadosURL = extrairDadosDaURL(urlOriginal, chaveAcesso);
+  if(dadosURL.valor > 0){
+    qrCache[chaveAcesso] = dadosURL;
+    aplicarDadosNFe(dadosURL);
+    return;
+  }
+
+  // Tenta buscar via API pública de consulta NF-e
+  // Usa proxy CORS público para não precisar de backend próprio
+  try {
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(urlOriginal)}`;
+    const resp = await Promise.race([
+      fetch(proxyUrl, { signal: AbortSignal.timeout(8000) }),
+      new Promise((_,r) => setTimeout(()=>r(new Error('timeout')), 8000))
+    ]);
+
+    if(resp.ok){
+      const html = await resp.text();
+      const dados = parsearHTMLNFe(html, chaveAcesso, urlOriginal);
+      if(dados.valor > 0){
+        qrCache[chaveAcesso] = dados;
+        aplicarDadosNFe(dados);
+        return;
+      }
+    }
+  } catch(e){
+    console.warn('Consulta SEFAZ falhou:', e.message);
+  }
+
+  // Fallback: preenche só o que dá a partir da URL e chave
+  const fallback = {
+    chaveAcesso,
+    urlOriginal,
+    valor: 0,
+    data: hoje,
+    cnpj: '',
+    fornecedor: '',
+    descricao: `NF-e ${chaveAcesso.substring(0,8)}...`,
+    itens: [],
+    fonte: 'manual',
+  };
+  aplicarDadosNFe(fallback, true);
+  notify('Não foi possível ler os dados da SEFAZ. Preencha o valor manualmente.', true);
+}
+
+// ── Extrai dados diretamente da URL (funciona para muitos modelos de QR) ──
+function extrairDadosDaURL(urlStr, chaveAcesso){
+  const resultado = { chaveAcesso, urlOriginal: urlStr, valor: 0, data: hoje, cnpj: '', fornecedor: '', descricao: '', itens: [], fonte: 'url' };
+  try {
+    const url = new URL(urlStr);
+    // Formato comum PE/BR: ?p=CHAVE|DATA|VALOR|...
+    const p = url.searchParams.get('p') || '';
+    if(p.includes('|')){
+      const partes = p.split('|');
+      if(partes[0]) resultado.chaveAcesso = partes[0].replace(/\D/g,'').substring(0,44);
+      // Valor geralmente está na 4ª posição em centavos ou reais
+      const valorStr = partes[3] || partes[2] || '';
+      const valorNum = parseFloat(valorStr.replace(',','.'));
+      if(valorNum > 0){
+        // Se valor > 10000, provavelmente está em centavos
+        resultado.valor = valorNum > 10000 ? valorNum/100 : valorNum;
+      }
+      // Data: formato AAAA-MM-DD ou DDMMAAAA
+      const dataStr = partes[1] || '';
+      if(dataStr.length >= 8){
+        const ano  = dataStr.substring(0,4);
+        const mes  = dataStr.substring(4,6);
+        const dia  = dataStr.substring(6,8);
+        if(parseInt(ano) > 2000) resultado.data = `${ano}-${mes}-${dia}`;
+      }
+    }
+    // CNPJ do emitente (44 dígitos da chave: posições 6–19)
+    if(resultado.chaveAcesso.length === 44){
+      resultado.cnpj = resultado.chaveAcesso.substring(6,20);
+      resultado.descricao = `NF-e — CNPJ ${formatarCNPJ(resultado.cnpj)}`;
+    }
+  } catch(e){}
+  return resultado;
+}
+
+// ── Parser do HTML da SEFAZ ──
+function parsearHTMLNFe(html, chaveAcesso, urlOriginal){
+  const resultado = { chaveAcesso, urlOriginal, valor: 0, data: hoje, cnpj: '', fornecedor: '', descricao: '', itens: [], fonte: 'sefaz' };
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Valor total — seletores comuns nos portais SEFAZ
+    const seletoresValor = ['.totalNota', '.valorTotal', '#totalNota', '.nfceTotais',
+      '[class*="total"]', '[class*="valor"]', 'td:contains("Total")'];
+    for(const sel of seletoresValor){
+      try {
+        const el = doc.querySelector(sel);
+        if(el){
+          const match = el.textContent.match(/[\d]+[.,][\d]{2}/);
+          if(match){
+            resultado.valor = parseFloat(match[0].replace('.','').replace(',','.'));
+            break;
+          }
+        }
+      } catch(e){}
+    }
+
+    // Nome do emitente
+    const seletoresEmit = ['.txtTit', '.razaoSocial', '.nomeEmitente', 'h4', '.emit'];
+    for(const sel of seletoresEmit){
+      const el = doc.querySelector(sel);
+      if(el && el.textContent.trim().length > 3){
+        resultado.fornecedor = el.textContent.trim().substring(0,60);
+        break;
+      }
+    }
+
+    // Data de emissão
+    const textoCompleto = doc.body?.textContent || '';
+    const matchData = textoCompleto.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if(matchData) resultado.data = `${matchData[3]}-${matchData[2].padStart(2,'0')}-${matchData[1].padStart(2,'0')}`;
+
+    if(resultado.fornecedor) resultado.descricao = `NF-e — ${resultado.fornecedor}`;
+    else resultado.descricao = `NF-e ${chaveAcesso.substring(0,8)}...`;
+  } catch(e){ console.error('Parse NF-e error:', e); }
+  return resultado;
+}
+
+// ── Aplica os dados no formulário ──
+function aplicarDadosNFe(dados, parcial=false){
+  // Tipo sempre Despesa para NF-e de compra
+  document.getElementById('f-tipo').value = 'Despesa';
+  updateCatSelect();
+  setTimeout(()=>{ setVal({'f-cat':'Fornecedores'}); }, 50);
+
+  if(dados.valor > 0){
+    document.getElementById('f-valor').value = dados.valor.toFixed(2);
+  }
+  if(dados.data) document.getElementById('f-data').value = dados.data;
+
+  // Descrição
+  const desc = dados.fornecedor
+    ? `NF-e — ${dados.fornecedor}`
+    : (dados.descricao || 'Nota Fiscal Eletrônica');
+  document.getElementById('f-desc').value = desc;
+
+  // Obs com chave de acesso para rastreabilidade
+  const obs = [
+    dados.fonte === 'sefaz' ? '✅ Dados da SEFAZ' : '📋 Dados da URL do QR Code',
+    dados.chaveAcesso ? `Chave: ${dados.chaveAcesso.substring(0,20)}...` : '',
+    dados.cnpj ? `CNPJ: ${formatarCNPJ(dados.cnpj)}` : '',
+  ].filter(Boolean).join(' · ');
+  document.getElementById('f-obs').value = obs;
+
+  // Tenta encontrar o fornecedor no cadastro pelo nome
+  if(dados.fornecedor){
+    const fornCad = (DB.fornecedores||[]).find(f =>
+      f.nome.toLowerCase().includes(dados.fornecedor.toLowerCase().substring(0,10))
+      || dados.fornecedor.toLowerCase().includes(f.nome.toLowerCase().substring(0,10))
+    );
+    if(fornCad){
+      const el = document.getElementById('f-entidade');
+      if(el) el.value = fornCad.nome;
+    }
+  }
+
+  // Mostra barra de resultado
+  const bar = document.getElementById('qr-result-bar');
+  bar.classList.add('active');
+  document.getElementById('qr-result-titulo').textContent =
+    parcial ? '⚠️ QR Code lido — complete o valor manualmente'
+            : `✅ NF-e lida — ${dados.fonte === 'sefaz' ? 'dados da SEFAZ' : 'dados do QR Code'}`;
+  document.getElementById('qr-result-desc').textContent =
+    [
+      dados.fornecedor || '',
+      dados.valor > 0 ? 'R$ ' + dados.valor.toFixed(2).replace('.',',') : 'valor não lido',
+      dados.data ? fmtDate(dados.data) : '',
+    ].filter(Boolean).join(' · ');
+
+  notify(dados.valor > 0 ? 'NF-e preenchida automaticamente! ✅' : 'QR Code lido — complete o valor.', dados.valor === 0);
+}
+
+function limparQRResult(){
+  document.getElementById('qr-result-bar').classList.remove('active');
+}
+
+function formatarCNPJ(cnpj){
+  if(!cnpj || cnpj.length < 14) return cnpj;
+  return `${cnpj.slice(0,2)}.${cnpj.slice(2,5)}.${cnpj.slice(5,8)}/${cnpj.slice(8,12)}-${cnpj.slice(12,14)}`;
+}
+
+// Garante que o scanner fecha quando o modal fecha
+const _fecharModalLancOrig = fecharModalLancamento;
+fecharModalLancamento = function(){
+  stopQRScanner();
+  limparQRResult();
+  _fecharModalLancOrig();
+};
 // ══════════════════════════════════════════════════════════════
 let importRows = [];      // todos os pedidos lidos
 let importRowsVisiveis = []; // filtrados pela origem
@@ -2463,14 +2962,39 @@ function parseXLSX(arrayBuffer, fileName){
     importRows = data.map((row, i) => {
       const rawData = colData ? row[colData] : null;
       let dataISO = '';
+
+      // Função auxiliar: extrai data LOCAL sem deslocamento de fuso
+      // toISOString() usa UTC e pode avançar um dia em fusos negativos (ex: UTC-3)
+      const extrairDataLocal = d => {
+        const ano = d.getFullYear();
+        const mes = String(d.getMonth()+1).padStart(2,'0');
+        const dia = String(d.getDate()).padStart(2,'0');
+        return `${ano}-${mes}-${dia}`;
+      };
+
       if(rawData instanceof Date){
-        dataISO = rawData.toISOString().split('T')[0];
+        // SheetJS já aplica o fuso corretamente quando cellDates:true
+        // Mas toISOString() converte para UTC — usar componentes locais
+        dataISO = extrairDataLocal(rawData);
       } else if(typeof rawData === 'string' && rawData){
-        // tenta parsear string de data
-        const d = new Date(rawData);
-        if(!isNaN(d)) dataISO = d.toISOString().split('T')[0];
-        else dataISO = hoje;
-      } else { dataISO = hoje; }
+        // String de data — parseia sem converter para UTC
+        // Formatos: "2026-07-30 23:30:00", "2026-07-30T23:30:00", "30/07/2026"
+        let d = null;
+        const strLimpa = rawData.trim();
+        // Formato ISO com hora: "2026-07-30 23:30:00"
+        const mISO = strLimpa.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if(mISO){
+          d = new Date(parseInt(mISO[1]), parseInt(mISO[2])-1, parseInt(mISO[3]));
+        }
+        // Formato BR: "30/07/2026"
+        const mBR = strLimpa.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if(!d && mBR){
+          d = new Date(parseInt(mBR[3]), parseInt(mBR[2])-1, parseInt(mBR[1]));
+        }
+        dataISO = (d && !isNaN(d)) ? extrairDataLocal(d) : hoje;
+      } else {
+        dataISO = hoje;
+      }
 
       const rawDataFmt = rawData instanceof Date
         ? rawData.toLocaleString('pt-BR')
