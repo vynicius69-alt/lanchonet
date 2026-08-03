@@ -265,6 +265,35 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
 .qr-status{font-size:12px;color:var(--muted);text-align:center;margin-top:10px;}
 .qr-result-bar{background:rgba(46,204,113,.12);border:1px solid rgba(46,204,113,.3);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--green);margin-bottom:14px;display:none;}
 .qr-result-bar.active{display:flex;align-items:center;gap:10px;}
+/* ── TELA NF-e DEDICADA ── */
+.nfe-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+.nfe-cam-box,.nfe-result-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.nfe-cam-header,.nfe-result-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.nfe-cam-title{font-size:14px;font-weight:700;}
+.nfe-cam-body,.nfe-result-body{padding:20px;}
+.nfe-video-wrap{position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:4/3;margin-bottom:14px;}
+.nfe-video-wrap video{width:100%;height:100%;object-fit:cover;display:block;}
+.nfe-scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.nfe-scan-frame{width:60%;aspect-ratio:1;border:3px solid var(--accent);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);}
+.nfe-scan-line{position:absolute;left:20%;width:60%;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:nfe-scan 1.8s linear infinite;}
+@keyframes nfe-scan{0%{top:20%}100%{top:80%}}
+.nfe-cam-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:44px 20px;color:var(--muted);text-align:center;}
+.nfe-cam-placeholder-icon{font-size:52px;opacity:.35;}
+.nfe-upload-area{border:2px dashed var(--border);border-radius:10px;padding:22px;text-align:center;cursor:pointer;transition:all .2s;margin-top:4px;}
+.nfe-upload-area:hover{border-color:var(--accent);background:rgba(244,162,97,.04);}
+.nfe-divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:12px;}
+.nfe-divider::before,.nfe-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+.nfe-status-bar{padding:10px 14px;border-radius:9px;font-size:13px;font-weight:600;margin-bottom:14px;display:none;align-items:center;gap:10px;}
+.nfe-status-bar.show{display:flex;}
+.nfe-status-bar.loading{background:rgba(52,152,219,.12);color:var(--blue);}
+.nfe-status-bar.success{background:rgba(46,204,113,.12);color:var(--green);}
+.nfe-status-bar.warning{background:rgba(244,162,97,.12);color:var(--accent);}
+.nfe-status-bar.error{background:rgba(231,76,60,.12);color:var(--red);}
+.nfe-field{margin-bottom:14px;}
+.nfe-field label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block;}
+.nfe-hist-item{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--card2);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:background .15s;}
+.nfe-hist-item:hover{background:rgba(255,255,255,.05);}
+@media(max-width:900px){.nfe-layout{grid-template-columns:1fr;}}
 .import-dropzone{border:2px dashed var(--border);border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(255,255,255,.02);}
 .import-dropzone:hover,.import-dropzone.dragover{border-color:var(--accent);background:rgba(244,162,97,.05);}
 .import-dropzone-icon{font-size:48px;margin-bottom:14px;opacity:.6;}
@@ -382,6 +411,7 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
     <div class="nav-section">Relatórios</div>
     <div class="nav-item" id="nav-relatorio" onclick="goTo('relatorio',this)"><span class="nav-icon">📄</span>Relatórios</div>
     <div class="nav-item" id="nav-importar" onclick="goTo('importar',this)"><span class="nav-icon">📥</span>Importar Planilha</div>
+    <div class="nav-item" id="nav-nfe" onclick="goTo('nfe',this)"><span class="nav-icon">🧾</span>Leitor NF-e</div>
   </nav>
   <div class="sidebar-footer">
     <div class="user-card">
@@ -720,6 +750,138 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
         </div>
       </div>
     </div>
+
+    <!-- LEITOR NF-e -->
+    <div class="section" id="sec-nfe">
+
+      <!-- Barra de status -->
+      <div class="nfe-status-bar" id="nfe-status-bar">
+        <span id="nfe-status-icon">⏳</span>
+        <span id="nfe-status-text">Aguardando leitura...</span>
+      </div>
+
+      <div class="nfe-layout">
+
+        <!-- COLUNA ESQUERDA: câmera + upload -->
+        <div class="nfe-cam-box">
+          <div class="nfe-cam-header">
+            <span style="font-size:20px">📷</span>
+            <span class="nfe-cam-title">Ler QR Code da NF-e</span>
+            <button class="btn btn-primary btn-sm" id="nfe-cam-btn" onclick="nfeCameraToggle()">Iniciar câmera</button>
+          </div>
+          <div class="nfe-cam-body">
+
+            <!-- Vídeo da câmera -->
+            <div class="nfe-video-wrap" id="nfe-video-wrap" style="display:none;">
+              <video id="nfe-video" playsinline muted autoplay></video>
+              <div class="nfe-scan-overlay">
+                <div style="position:relative;width:60%;aspect-ratio:1;">
+                  <div class="nfe-scan-frame"></div>
+                  <div class="nfe-scan-line"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Placeholder quando câmera está fechada -->
+            <div class="nfe-cam-placeholder" id="nfe-cam-placeholder">
+              <div class="nfe-cam-placeholder-icon">🧾</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Aponte para o QR Code da nota</div>
+              <div style="font-size:12px">Clique em "Iniciar câmera" ou envie uma foto abaixo</div>
+            </div>
+
+            <!-- Divider -->
+            <div class="nfe-divider">ou</div>
+
+            <!-- Upload de imagem -->
+            <div class="nfe-upload-area" onclick="document.getElementById('nfe-img-input').click()">
+              <div style="font-size:28px;margin-bottom:8px;">🖼️</div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Enviar foto da nota</div>
+              <div style="font-size:11px;color:var(--muted)">JPG, PNG, WEBP — foto do QR Code</div>
+              <input type="file" id="nfe-img-input" accept="image/*" capture="environment" style="display:none" onchange="nfeProcessImage(event)">
+            </div>
+
+            <!-- Histórico de leituras -->
+            <div id="nfe-historico-wrap" style="margin-top:20px;display:none;">
+              <div style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Leituras recentes</div>
+              <div id="nfe-historico-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- COLUNA DIREITA: formulário de lançamento -->
+        <div class="nfe-result-box">
+          <div class="nfe-result-header">
+            <div>
+              <div style="font-size:14px;font-weight:700;">📋 Dados da Nota</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="nfe-result-subtitle">Leia um QR Code para preencher</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="nfeLimpar()" id="nfe-limpar-btn" style="display:none;">🔄 Nova leitura</button>
+          </div>
+          <div class="nfe-result-body">
+
+            <!-- Campos do formulário -->
+            <div class="nfe-field">
+              <label>Fornecedor / Razão Social</label>
+              <input class="form-input" id="nfe-fornecedor" placeholder="Preenchido automaticamente...">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="nfe-field">
+                <label>Valor Total (R$) *</label>
+                <input class="form-input" id="nfe-valor" type="number" step="0.01" placeholder="0,00" style="color:var(--green);font-weight:700;">
+              </div>
+              <div class="nfe-field">
+                <label>Data da Nota *</label>
+                <input class="form-input" id="nfe-data" type="date">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="nfe-field">
+                <label>Categoria</label>
+                <select class="form-input" id="nfe-cat"></select>
+              </div>
+              <div class="nfe-field">
+                <label>Status</label>
+                <select class="form-input" id="nfe-status-lanc">
+                  <option value="Pago">Pago</option>
+                  <option value="A Pagar">A Pagar</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="nfe-field">
+                <label>Conta Bancária *</label>
+                <select class="form-input" id="nfe-conta"></select>
+              </div>
+              <div class="nfe-field">
+                <label>Forma de Pagamento</label>
+                <select class="form-input" id="nfe-forma">
+                  <option>Pix</option><option>Dinheiro</option><option>Débito</option>
+                  <option>Crédito</option><option>Boleto</option><option>TED/DOC</option>
+                </select>
+              </div>
+            </div>
+            <div class="nfe-field">
+              <label>Fornecedor (cadastro)</label>
+              <select class="form-input" id="nfe-forn-select"><option value="">— Nenhum —</option></select>
+            </div>
+            <div class="nfe-field">
+              <label>Observação / Chave de Acesso</label>
+              <input class="form-input" id="nfe-obs" placeholder="Chave de acesso e outros dados da nota...">
+            </div>
+
+            <!-- CNPJ informativo -->
+            <div id="nfe-cnpj-bar" style="display:none;padding:9px 13px;background:rgba(52,152,219,.08);border-radius:8px;font-size:12px;color:var(--muted);margin-bottom:14px;">
+              🏢 CNPJ Emitente: <strong id="nfe-cnpj-valor" style="color:var(--text)">—</strong>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:14px;" onclick="nfeSalvarLancamento()" id="nfe-salvar-btn">
+              💾 Lançar como Despesa
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /nfe-layout -->
+    </div><!-- /sec-nfe -->
 
   </div><!-- /content -->
 </main>
@@ -1264,7 +1426,7 @@ function canAccess(s){ if(!currentUser)return false; if(currentUser.perfil==='ad
 function applyPermissions(){
   if(!currentUser)return;
   const isAdm = currentUser.perfil==='adm';
-  ['dashboard','caixa','contas-banco','lancamentos','contas-pagar','contas-receber','fluxo','dre','rh','relatorio','cadastros'].forEach(s=>{
+  ['dashboard','caixa','contas-banco','lancamentos','contas-pagar','contas-receber','fluxo','dre','rh','relatorio','cadastros','importar','nfe'].forEach(s=>{
     const el=document.getElementById('nav-'+s); if(el) el.classList.toggle('hidden-nav',!(isAdm||(currentUser.permissoes||{})[s]));
   });
 }
@@ -1293,6 +1455,8 @@ const pageInfo={
 };
 function goTo(sec,el){
   if(!canAccess(sec)){ notify('Sem permissão para acessar esta tela.',true); return; }
+  // Para câmera NF-e se estiver ativa ao sair da tela
+  if(sec !== 'nfe' && nfeAtivo) nfeCameraStop();
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('sec-'+sec).classList.add('active');
@@ -1306,7 +1470,7 @@ function goTo(sec,el){
 }
 function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('open'); }
 function renderSection(sec){
-  ({dashboard:renderDashboard,caixa:renderCaixa,'contas-banco':renderContasBanco,lancamentos:renderLancamentos,'contas-pagar':()=>renderPagar(pagar_filter),'contas-receber':renderReceber,fluxo:renderFluxo,dre:renderDRE,rh:renderRH,cadastros:()=>cadTab('contas-banco-cad',document.querySelector('#cad-tabs .tab')),relatorio:renderRelatorio,importar:renderImportar})[sec]?.();
+  ({dashboard:renderDashboard,caixa:renderCaixa,'contas-banco':renderContasBanco,lancamentos:renderLancamentos,'contas-pagar':()=>renderPagar(pagar_filter),'contas-receber':renderReceber,fluxo:renderFluxo,dre:renderDRE,rh:renderRH,cadastros:()=>cadTab('contas-banco-cad',document.querySelector('#cad-tabs .tab')),relatorio:renderRelatorio,importar:renderImportar,nfe:renderNFe})[sec]?.();
 }
 function renderImportar(){
   // Atualiza selects de conta ao entrar na tela
@@ -2874,8 +3038,279 @@ fecharModalLancamento = function(){
   limparQRResult();
   _fecharModalLancOrig();
 };
+
 // ══════════════════════════════════════════════════════════════
-let importRows = [];      // todos os pedidos lidos
+// TELA DEDICADA LEITOR NF-e
+// ══════════════════════════════════════════════════════════════
+pageInfo['nfe'] = {title:'Leitor NF-e', sub:'Escanear QR Code de notas fiscais de fornecedores'};
+
+let nfeStream    = null;
+let nfeAnimFrame = null;
+let nfeCache     = {};
+let nfeHistorico = [];
+let nfeAtivo     = false;
+let _jsQRloaded  = false;
+
+function renderNFe(){
+  const catOpts   = (DB.tiposDesp||[]).map(t=>`<option>${t.nome}</option>`).join('');
+  const contaOpts = (DB.contas||[]).map(c=>`<option>${c.nome}</option>`).join('');
+  const fornOpts  = '<option value="">— Nenhum —</option>'+(DB.fornecedores||[]).filter(f=>f.status==='Ativo').map(f=>`<option>${f.nome}</option>`).join('');
+  document.getElementById('nfe-cat').innerHTML          = catOpts;
+  document.getElementById('nfe-conta').innerHTML        = contaOpts;
+  document.getElementById('nfe-forn-select').innerHTML  = fornOpts;
+  document.getElementById('nfe-data').value             = hoje;
+  nfeRenderHistorico();
+}
+
+function nfeStatus(tipo,texto,icone='⏳'){
+  const bar=document.getElementById('nfe-status-bar');
+  bar.className=`nfe-status-bar show ${tipo}`;
+  document.getElementById('nfe-status-icon').textContent=icone;
+  document.getElementById('nfe-status-text').textContent=texto;
+}
+function nfeStatusOk(t)    { nfeStatus('success',t,'✅'); }
+function nfeStatusErro(t)  { nfeStatus('error',t,'❌'); }
+function nfeStatusLoad(t)  { nfeStatus('loading',t,'⏳'); }
+function nfeStatusAviso(t) { nfeStatus('warning',t,'⚠️'); }
+function nfeStatusOcultar(){ document.getElementById('nfe-status-bar').classList.remove('show'); }
+
+async function nfeCameraToggle(){
+  if(nfeAtivo){ nfeCameraStop(); return; }
+  await nfeCameraStart();
+}
+async function nfeCameraStart(){
+  if(!navigator.mediaDevices?.getUserMedia){ nfeStatusErro('Câmera não suportada neste navegador.'); return; }
+  try{
+    nfeStatusLoad('Solicitando acesso à câmera...');
+    nfeStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});
+    const video=document.getElementById('nfe-video');
+    video.srcObject=nfeStream; await video.play();
+    document.getElementById('nfe-video-wrap').style.display='block';
+    document.getElementById('nfe-cam-placeholder').style.display='none';
+    document.getElementById('nfe-cam-btn').textContent='⏹ Parar câmera';
+    nfeAtivo=true;
+    nfeStatusLoad('📷 Posicione o QR Code dentro do quadro laranja...');
+    if('BarcodeDetector' in window){ nfeScanNativo(video); }
+    else { await nfeCarregarJsQR(); nfeScanJsQR(video); }
+  }catch(e){ nfeStatusErro('Não foi possível acessar a câmera. Verifique as permissões.'); }
+}
+function nfeCameraStop(){
+  if(nfeStream){ nfeStream.getTracks().forEach(t=>t.stop()); nfeStream=null; }
+  if(nfeAnimFrame){ cancelAnimationFrame(nfeAnimFrame); nfeAnimFrame=null; }
+  document.getElementById('nfe-video-wrap').style.display='none';
+  document.getElementById('nfe-cam-placeholder').style.display='flex';
+  document.getElementById('nfe-cam-btn').textContent='Iniciar câmera';
+  nfeAtivo=false;
+}
+async function nfeScanNativo(video){
+  const det=new BarcodeDetector({formats:['qr_code']});
+  const loop=async()=>{
+    if(!nfeAtivo) return;
+    try{ const codes=await det.detect(video); if(codes.length){ await nfeProcessarURL(codes[0].rawValue); return; } }catch(e){}
+    nfeAnimFrame=requestAnimationFrame(loop);
+  };
+  nfeAnimFrame=requestAnimationFrame(loop);
+}
+async function nfeCarregarJsQR(){
+  if(_jsQRloaded) return;
+  return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js'; s.onload=()=>{_jsQRloaded=true;res();};s.onerror=rej;document.head.appendChild(s); });
+}
+function nfeScanJsQR(video){
+  const canvas=document.createElement('canvas'); const ctx2=canvas.getContext('2d');
+  const loop=()=>{
+    if(!nfeAtivo) return;
+    if(video.readyState===video.HAVE_ENOUGH_DATA){
+      canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx2.drawImage(video,0,0);
+      const img=ctx2.getImageData(0,0,canvas.width,canvas.height);
+      const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+      if(code){ nfeProcessarURL(code.data); return; }
+    }
+    nfeAnimFrame=requestAnimationFrame(loop);
+  };
+  nfeAnimFrame=requestAnimationFrame(loop);
+}
+async function nfeProcessImage(evt){
+  const file=evt.target.files[0]; if(!file) return; evt.target.value='';
+  nfeStatusLoad('Analisando imagem...');
+  if('BarcodeDetector' in window){
+    try{ const det=new BarcodeDetector({formats:['qr_code']}); const img=await createImageBitmap(file); const codes=await det.detect(img); if(codes.length){ await nfeProcessarURL(codes[0].rawValue); return; } }catch(e){}
+  }
+  try{
+    await nfeCarregarJsQR();
+    const bmp=await createImageBitmap(file);
+    const canvas=document.createElement('canvas'); canvas.width=bmp.width;canvas.height=bmp.height;
+    const ctx2=canvas.getContext('2d'); ctx2.drawImage(bmp,0,0);
+    const img=ctx2.getImageData(0,0,canvas.width,canvas.height);
+    const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'attemptBoth'});
+    if(code){ await nfeProcessarURL(code.data); return; }
+  }catch(e){}
+  nfeStatusErro('QR Code não encontrado na imagem. Tente uma foto mais nítida e bem iluminada.');
+}
+
+async function nfeProcessarURL(rawValue){
+  nfeCameraStop();
+  nfeStatusLoad('QR Code lido! Consultando dados da nota...');
+  let chave='', urlOriginal=rawValue;
+  try{
+    const url=new URL(rawValue);
+    chave = url.searchParams.get('chNFe')||url.searchParams.get('nfe')||url.searchParams.get('c')||'';
+    const paramP=url.searchParams.get('p')||'';
+    if(!chave&&paramP) chave=paramP.split('|')[0];
+  }catch(e){}
+  if(!chave) chave=rawValue.replace(/\D/g,'').substring(0,44);
+  if(chave&&nfeCache[chave]){ nfeAplicarDados(nfeCache[chave]); nfeStatusOk('Dados carregados do cache.'); return; }
+
+  const dadosURL=nfeExtrairDaURL(rawValue,chave);
+  let dadosSefaz=null;
+  try{
+    const proxy=`https://corsproxy.io/?${encodeURIComponent(rawValue)}`;
+    const resp=await Promise.race([fetch(proxy),new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),9000))]);
+    if(resp.ok){ const html=await resp.text(); dadosSefaz=nfeParseHTML(html,chave,rawValue); }
+  }catch(e){ console.warn('SEFAZ fetch:',e.message); }
+
+  const dados={
+    chave, urlOriginal,
+    valor:      dadosSefaz?.valor>0      ? dadosSefaz.valor      : dadosURL.valor,
+    data:       dadosSefaz?.data         ? dadosSefaz.data        : dadosURL.data,
+    fornecedor: dadosSefaz?.fornecedor   ? dadosSefaz.fornecedor  : dadosURL.fornecedor,
+    cnpj:       dadosSefaz?.cnpj         ? dadosSefaz.cnpj        : dadosURL.cnpj,
+    fonte:      dadosSefaz?.valor>0      ? 'sefaz'                : 'url',
+  };
+  if(chave) nfeCache[chave]=dados;
+  nfeAplicarDados(dados);
+}
+
+function nfeExtrairDaURL(urlStr,chave){
+  const r={chave,valor:0,data:hoje,fornecedor:'',cnpj:''};
+  try{
+    const url=new URL(urlStr);
+    const p=url.searchParams.get('p')||'';
+    if(p.includes('|')){
+      const pts=p.split('|');
+      // Data: pts[1]
+      const ds=(pts[1]||'').trim();
+      const dm=ds.match(/(\d{4})-?(\d{2})-?(\d{2})/);
+      if(dm) r.data=`${dm[1]}-${dm[2]}-${dm[3]}`;
+      // Valor: procura em pts[2..4] o que for decimal não inteiro e plausível
+      // CORREÇÃO: ignora dígito verificador (número inteiro de 1 dígito = pts[4])
+      for(let i=2;i<=4;i++){
+        const raw=(pts[i]||'').replace(',','.');
+        const v=parseFloat(raw);
+        if(v>0 && v<999999 && raw.includes('.')){ r.valor=v; break; }
+      }
+      // Fallback: qualquer valor > 1 e não inteiro
+      if(!r.valor){
+        for(let i=2;i<=4;i++){
+          const v=parseFloat((pts[i]||'').replace(',','.'));
+          if(v>1 && v<999999 && v!==Math.floor(v)){ r.valor=v; break; }
+        }
+      }
+    }
+    if(chave&&chave.length===44) r.cnpj=chave.substring(6,20);
+  }catch(e){}
+  return r;
+}
+
+function nfeParseHTML(html,chave,urlOriginal){
+  const r={chave,urlOriginal,valor:0,data:hoje,fornecedor:'',cnpj:'',fonte:'sefaz'};
+  try{
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    const txt=doc.body?.innerText||doc.body?.textContent||'';
+    // Valor
+    const selsVal=['.totalNota span','#totalNota','#vlrTotalNF','[id*="total"]','[class*="totalNota"]','[class*="valorTotal"]'];
+    for(const sel of selsVal){
+      try{
+        const els=doc.querySelectorAll(sel);
+        for(const el of els){
+          const m=el.textContent.trim().match(/(\d{1,3}(?:\.\d{3})*,\d{2})/);
+          if(m){ const v=parseFloat(m[1].replace(/\./g,'').replace(',','.')); if(v>0&&v<1000000){r.valor=v;break;} }
+        }
+        if(r.valor>0) break;
+      }catch(e){}
+    }
+    if(!r.valor){ const m=txt.match(/[Tt]otal[:\s]+R?\$?\s*([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})/); if(m) r.valor=parseFloat(m[1].replace(/\./g,'').replace(',','.')); }
+    // Razão social
+    const selsNome=['.txtTit','.nomeEmitente','.razaoSocial','#nomeEmitente','#razaoSocial','h4','.xNome'];
+    for(const sel of selsNome){
+      try{ const el=doc.querySelector(sel); if(el){ const n=el.textContent.trim(); if(n.length>2&&n.length<100&&!n.match(/^\d/)){ r.fornecedor=n; break; } } }catch(e){}
+    }
+    if(!r.fornecedor){ for(const tag of ['h4','h3']){ const el=doc.querySelector(tag); if(el){const n=el.textContent.trim();if(n.length>2&&n.length<100){r.fornecedor=n;break;}} } }
+    // CNPJ
+    const mc=txt.match(/(\d{2}[\.\-]?\d{3}[\.\-]?\d{3}[\/\.\-]?\d{4}[\-]?\d{2})/);
+    if(mc) r.cnpj=mc[1].replace(/\D/g,'');
+    else if(chave?.length===44) r.cnpj=chave.substring(6,20);
+    // Data
+    const md=txt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if(md) r.data=`${md[3]}-${md[2].padStart(2,'0')}-${md[1].padStart(2,'0')}`;
+  }catch(e){ console.error('Parse NF-e:',e); }
+  return r;
+}
+
+function nfeAplicarDados(dados){
+  document.getElementById('nfe-fornecedor').value = dados.fornecedor||'';
+  document.getElementById('nfe-valor').value       = dados.valor>0 ? dados.valor.toFixed(2) : '';
+  document.getElementById('nfe-data').value         = dados.data||hoje;
+  document.getElementById('nfe-limpar-btn').style.display='block';
+  if(dados.cnpj){ document.getElementById('nfe-cnpj-bar').style.display='block'; document.getElementById('nfe-cnpj-valor').textContent=nfeFmtCNPJ(dados.cnpj); }
+  const obs=[dados.fonte==='sefaz'?'✅ SEFAZ':'📋 QR Code',dados.chave?`Chave: ${dados.chave.substring(0,20)}...`:'',dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:''].filter(Boolean).join(' | ');
+  document.getElementById('nfe-obs').value=obs;
+  // Cruza com fornecedor cadastrado
+  if(dados.fornecedor||dados.cnpj){
+    const found=(DB.fornecedores||[]).find(f=>{
+      const nOk=dados.fornecedor&&(f.nome.toLowerCase().includes(dados.fornecedor.toLowerCase().substring(0,8))||dados.fornecedor.toLowerCase().includes(f.nome.toLowerCase().substring(0,8)));
+      const cOk=dados.cnpj&&f.doc&&f.doc.replace(/\D/g,'')===dados.cnpj.replace(/\D/g,'');
+      return nOk||cOk;
+    });
+    if(found){ document.getElementById('nfe-forn-select').value=found.nome; }
+  }
+  document.getElementById('nfe-result-subtitle').textContent=dados.fornecedor||(dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:'Nota lida');
+  if(dados.valor>0&&dados.fornecedor) nfeStatusOk(`Nota lida — ${dados.fornecedor} · ${fmt(dados.valor)}`);
+  else if(dados.valor>0) nfeStatusAviso(`Valor: ${fmt(dados.valor)} — confirme o fornecedor`);
+  else nfeStatusAviso('QR Code lido — preencha o valor manualmente.');
+  nfeHistorico.unshift({...dados,ts:Date.now()});
+  if(nfeHistorico.length>5) nfeHistorico.pop();
+  nfeRenderHistorico();
+}
+
+function nfeSalvarLancamento(){
+  const valor=parseFloat(document.getElementById('nfe-valor').value);
+  const data=document.getElementById('nfe-data').value;
+  const conta=document.getElementById('nfe-conta').value;
+  if(!valor||!data||!conta){ notify('Preencha Valor, Data e Conta.',true); return; }
+  const forn=document.getElementById('nfe-fornecedor').value.trim();
+  const fornSel=document.getElementById('nfe-forn-select').value;
+  const desc=forn?`NF-e — ${forn}`:'NF-e — Fornecedor';
+  const lanc={id:newId(),tipo:'Despesa',desc,valor,data,cat:document.getElementById('nfe-cat').value||'Fornecedores',status:document.getElementById('nfe-status-lanc').value,conta,forma:document.getElementById('nfe-forma').value,entidade:fornSel||forn,obs:document.getElementById('nfe-obs').value};
+  if(!DB.lancamentos) DB.lancamentos=[];
+  DB.lancamentos.push(lanc);
+  salvarDB('lancamentos',DB.lancamentos);
+  updateBadge();
+  criarNotificacao('despesa','NF-e lançada',`${desc} · ${conta}`,fmt(valor));
+  notify('NF-e lançada como despesa! ✅');
+  nfeLimpar();
+}
+
+function nfeLimpar(){
+  ['nfe-fornecedor','nfe-valor','nfe-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('nfe-data').value=hoje;
+  document.getElementById('nfe-cnpj-bar').style.display='none';
+  document.getElementById('nfe-limpar-btn').style.display='none';
+  document.getElementById('nfe-result-subtitle').textContent='Leia um QR Code para preencher';
+  nfeStatusOcultar();
+}
+
+function nfeRenderHistorico(){
+  const wrap=document.getElementById('nfe-historico-wrap');
+  const list=document.getElementById('nfe-historico-list');
+  if(!nfeHistorico.length){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  list.innerHTML=nfeHistorico.map((h,i)=>`<div class="nfe-hist-item" onclick="nfeAplicarDados(nfeHistorico[${i}])"><span style="font-size:18px">🧾</span><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.fornecedor||'Fornecedor não identificado'}</div><div style="font-size:11px;color:var(--muted)">${fmt(h.valor)} · ${fmtDate(h.data)}</div></div><span style="font-size:11px;color:var(--muted)">${h.fonte==='sefaz'?'SEFAZ':'QR'}</span></div>`).join('');
+}
+
+function nfeFmtCNPJ(c){
+  if(!c||c.length<14) return c||'';
+  return `${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,8)}/${c.slice(8,12)}-${c.slice(12,14)}`;
+}
 let importRowsVisiveis = []; // filtrados pela origem
 
 // ── pageInfo entry ──
