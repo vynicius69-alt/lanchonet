@@ -3153,7 +3153,11 @@ async function nfeProcessarURL(rawValue){
   let chave='', urlOriginal=rawValue;
   try{
     const url=new URL(rawValue);
-    chave = url.searchParams.get('chNFe')||url.searchParams.get('nfe')||url.searchParams.get('c')||'';
+    // SEFAZ-PE usa parâmetro "chave" (não "chNFe")
+    chave = url.searchParams.get('chave')
+          ||url.searchParams.get('chNFe')
+          ||url.searchParams.get('nfe')
+          ||url.searchParams.get('c')||'';
     const paramP=url.searchParams.get('p')||'';
     if(!chave&&paramP) chave=paramP.split('|')[0];
   }catch(e){}
@@ -3162,47 +3166,55 @@ async function nfeProcessarURL(rawValue){
 
   const dadosURL=nfeExtrairDaURL(rawValue,chave);
   let dadosSefaz=null;
-  try{
-    const proxy=`https://corsproxy.io/?${encodeURIComponent(rawValue)}`;
-    const resp=await Promise.race([fetch(proxy),new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),9000))]);
-    if(resp.ok){ const html=await resp.text(); dadosSefaz=nfeParseHTML(html,chave,rawValue); }
-  }catch(e){ console.warn('SEFAZ fetch:',e.message); }
-
+  // Tenta múltiplos proxies CORS
+  const proxies=[
+    `https://corsproxy.io/?${encodeURIComponent(rawValue)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(rawValue)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const resp=await Promise.race([fetch(proxy),new Promise((_,r)=>setTimeout(()=>r(new Error('t')),10000))]);
+      if(resp.ok){
+        let html=await resp.text();
+        if(proxy.includes('allorigins')){ try{html=JSON.parse(html).contents;}catch(e){} }
+        dadosSefaz=nfeParseHTML(html,chave,rawValue);
+        if(dadosSefaz.valor>0||dadosSefaz.itens?.length>0) break;
+      }
+    }catch(e){ console.warn('Proxy:',e.message); }
+  }
   const dados={
     chave, urlOriginal,
-    valor:      dadosSefaz?.valor>0      ? dadosSefaz.valor      : dadosURL.valor,
-    data:       dadosSefaz?.data         ? dadosSefaz.data        : dadosURL.data,
-    fornecedor: dadosSefaz?.fornecedor   ? dadosSefaz.fornecedor  : dadosURL.fornecedor,
-    cnpj:       dadosSefaz?.cnpj         ? dadosSefaz.cnpj        : dadosURL.cnpj,
-    fonte:      dadosSefaz?.valor>0      ? 'sefaz'                : 'url',
+    valor:       dadosSefaz?.valor>0    ? dadosSefaz.valor      : dadosURL.valor,
+    data:        dadosSefaz?.data       ? dadosSefaz.data        : dadosURL.data,
+    fornecedor:  dadosSefaz?.fornecedor ? dadosSefaz.fornecedor  : dadosURL.fornecedor,
+    nomeFantasia:dadosSefaz?.nomeFantasia||'',
+    cnpj:        dadosSefaz?.cnpj       ? dadosSefaz.cnpj        : dadosURL.cnpj,
+    itens:       dadosSefaz?.itens      ||[],
+    fonte:       dadosSefaz?.valor>0    ? 'sefaz'                : 'url',
   };
   if(chave) nfeCache[chave]=dados;
   nfeAplicarDados(dados);
 }
 
 function nfeExtrairDaURL(urlStr,chave){
-  const r={chave,valor:0,data:hoje,fornecedor:'',cnpj:''};
+  const r={chave,valor:0,data:hoje,fornecedor:'',nomeFantasia:'',cnpj:'',itens:[]};
   try{
     const url=new URL(urlStr);
     const p=url.searchParams.get('p')||'';
     if(p.includes('|')){
       const pts=p.split('|');
-      // Data: pts[1]
       const ds=(pts[1]||'').trim();
       const dm=ds.match(/(\d{4})-?(\d{2})-?(\d{2})/);
       if(dm) r.data=`${dm[1]}-${dm[2]}-${dm[3]}`;
-      // Valor: procura em pts[2..4] o que for decimal não inteiro e plausível
-      // CORREÇÃO: ignora dígito verificador (número inteiro de 1 dígito = pts[4])
       for(let i=2;i<=4;i++){
         const raw=(pts[i]||'').replace(',','.');
         const v=parseFloat(raw);
-        if(v>0 && v<999999 && raw.includes('.')){ r.valor=v; break; }
+        if(v>0&&v<999999&&raw.includes('.')){ r.valor=v; break; }
       }
-      // Fallback: qualquer valor > 1 e não inteiro
       if(!r.valor){
         for(let i=2;i<=4;i++){
           const v=parseFloat((pts[i]||'').replace(',','.'));
-          if(v>1 && v<999999 && v!==Math.floor(v)){ r.valor=v; break; }
+          if(v>1&&v<999999&&v!==Math.floor(v)){ r.valor=v; break; }
         }
       }
     }
@@ -3212,90 +3224,322 @@ function nfeExtrairDaURL(urlStr,chave){
 }
 
 function nfeParseHTML(html,chave,urlOriginal){
-  const r={chave,urlOriginal,valor:0,data:hoje,fornecedor:'',cnpj:'',fonte:'sefaz'};
+  const r={chave,urlOriginal,valor:0,data:hoje,fornecedor:'',nomeFantasia:'',cnpj:'',itens:[],fonte:'sefaz'};
   try{
     const doc=new DOMParser().parseFromString(html,'text/html');
     const txt=doc.body?.innerText||doc.body?.textContent||'';
-    // Valor
-    const selsVal=['.totalNota span','#totalNota','#vlrTotalNF','[id*="total"]','[class*="totalNota"]','[class*="valorTotal"]'];
-    for(const sel of selsVal){
-      try{
-        const els=doc.querySelectorAll(sel);
-        for(const el of els){
-          const m=el.textContent.trim().match(/(\d{1,3}(?:\.\d{3})*,\d{2})/);
-          if(m){ const v=parseFloat(m[1].replace(/\./g,'').replace(',','.')); if(v>0&&v<1000000){r.valor=v;break;} }
-        }
-        if(r.valor>0) break;
-      }catch(e){}
+    const allLabels=doc.querySelectorAll('label');
+
+    // ── RAZÃO SOCIAL e NOME FANTASIA (SEFAZ-PE usa inputs com labels) ──
+    for(const label of allLabels){
+      const lt=label.textContent.toLowerCase();
+      if(lt.includes('razão social')||lt.includes('razao social')||lt.includes('nome / razão')){
+        let next=label.nextElementSibling;
+        while(next&&!['INPUT','TEXTAREA'].includes(next.tagName)) next=next.nextElementSibling;
+        if(next){ const v=(next.value||next.textContent||'').trim(); if(v.length>2) r.fornecedor=v; }
+      }
+      if(lt.includes('nome fantasia')||lt.includes('fantasia')){
+        let next=label.nextElementSibling;
+        while(next&&!['INPUT','TEXTAREA'].includes(next.tagName)) next=next.nextElementSibling;
+        if(next){ const v=(next.value||next.textContent||'').trim(); if(v.length>2) r.nomeFantasia=v; }
+      }
     }
-    if(!r.valor){ const m=txt.match(/[Tt]otal[:\s]+R?\$?\s*([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})/); if(m) r.valor=parseFloat(m[1].replace(/\./g,'').replace(',','.')); }
-    // Razão social
-    const selsNome=['.txtTit','.nomeEmitente','.razaoSocial','#nomeEmitente','#razaoSocial','h4','.xNome'];
-    for(const sel of selsNome){
-      try{ const el=doc.querySelector(sel); if(el){ const n=el.textContent.trim(); if(n.length>2&&n.length<100&&!n.match(/^\d/)){ r.fornecedor=n; break; } } }catch(e){}
+    // Fallback razão social
+    if(!r.fornecedor){
+      for(const inp of doc.querySelectorAll('input[value],textarea')){
+        const v=(inp.value||inp.textContent||'').trim();
+        if(v.length>5&&v.length<100&&/[A-Z]{3,}/.test(v)&&!v.match(/^\d/)&&!v.match(/^\d{2}\./)){ r.fornecedor=v; break; }
+      }
     }
-    if(!r.fornecedor){ for(const tag of ['h4','h3']){ const el=doc.querySelector(tag); if(el){const n=el.textContent.trim();if(n.length>2&&n.length<100){r.fornecedor=n;break;}} } }
-    // CNPJ
-    const mc=txt.match(/(\d{2}[\.\-]?\d{3}[\.\-]?\d{3}[\/\.\-]?\d{4}[\-]?\d{2})/);
-    if(mc) r.cnpj=mc[1].replace(/\D/g,'');
-    else if(chave?.length===44) r.cnpj=chave.substring(6,20);
-    // Data
-    const md=txt.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if(md) r.data=`${md[3]}-${md[2].padStart(2,'0')}-${md[1].padStart(2,'0')}`;
-  }catch(e){ console.error('Parse NF-e:',e); }
+
+    // ── CNPJ ──
+    for(const label of allLabels){
+      if(label.textContent.toLowerCase().includes('cnpj')){
+        let next=label.nextElementSibling;
+        while(next&&next.tagName!=='INPUT') next=next.nextElementSibling;
+        if(next){ const v=(next.value||'').replace(/\D/g,''); if(v.length>=14){r.cnpj=v;break;} }
+      }
+    }
+    if(!r.cnpj){ const mc=txt.match(/(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/); if(mc) r.cnpj=mc[1].replace(/\D/g,''); }
+    if(!r.cnpj&&chave?.length===44) r.cnpj=chave.substring(6,20);
+
+    // ── DATA ──
+    for(const label of allLabels){
+      const lt=label.textContent.toLowerCase();
+      if(lt.includes('emissão')||lt.includes('emissao')){
+        let next=label.nextElementSibling;
+        while(next&&next.tagName!=='INPUT') next=next.nextElementSibling;
+        if(next){ const md=(next.value||'').match(/(\d{2})\/(\d{2})\/(\d{4})/); if(md){r.data=`${md[3]}-${md[2]}-${md[1]}`;break;} }
+      }
+    }
+    if(!r.data||r.data===hoje){ const md=txt.match(/(\d{2})\/(\d{2})\/(\d{4})/); if(md) r.data=`${md[3]}-${md[2].padStart(2,'0')}-${md[1].padStart(2,'0')}`; }
+
+    // ── VALOR TOTAL ──
+    for(const label of allLabels){
+      if(label.textContent.toLowerCase().includes('valor total')){
+        let next=label.nextElementSibling;
+        while(next&&next.tagName!=='INPUT') next=next.nextElementSibling;
+        if(next){ const v=parseFloat((next.value||'').replace(',','.')); if(v>0&&v<1000000){r.valor=v;break;} }
+      }
+    }
+    if(!r.valor){ const mv=txt.match(/Valor Total[^\d]*(\d{1,3}(?:\.\d{3})*,\d{2})/i); if(mv) r.valor=parseFloat(mv[1].replace(/\./g,'').replace(',','.')); }
+
+    // ── ITENS — tabela "Dados dos Produtos e Serviços" (SEFAZ-PE) ──
+    for(const tabela of doc.querySelectorAll('table')){
+      const thead=tabela.querySelector('thead');
+      if(!thead) continue;
+      const ths=Array.from(thead.querySelectorAll('th')).map(th=>th.textContent.trim().toLowerCase());
+      if(!ths.some(t=>t.includes('descri'))) continue;
+
+      const iDesc  = ths.findIndex(t=>t.includes('descri'));
+      const iQtd   = ths.findIndex(t=>t.includes('qtd')||t.includes('quant'));
+      const iUnid  = ths.findIndex(t=>t.includes('unidade'));
+      const iVUnit = ths.findIndex(t=>t.includes('unit'));
+      const iValor = ths.length-1; // última coluna = Valor(R$)
+
+      for(const tr of tabela.querySelectorAll('tbody tr')){
+        const getCel=i=>{
+          const tds=tr.querySelectorAll('td');
+          if(i<0||i>=tds.length) return '';
+          const inp=tds[i].querySelector('input');
+          return (inp?.value||tds[i].textContent||'').trim();
+        };
+        const desc  = getCel(iDesc>=0?iDesc:1);
+        const qtdS  = getCel(iQtd>=0?iQtd:2);
+        const unid  = getCel(iUnid>=0?iUnid:3);
+        const vUniS = getCel(iVUnit>=0?iVUnit:4);
+        const valS  = getCel(iValor);
+
+        if(!desc||desc.length<2) continue;
+        const qtd  = parseFloat(qtdS.replace(',','.'))||1;
+        const vUni = parseFloat(vUniS.replace(',','.'))||0;
+        const val  = parseFloat(valS.replace(',','.'))||0;
+        if(val<=0&&vUni<=0) continue;
+
+        r.itens.push({descricao:desc,qtd,unidade:unid||'UN',vUnit:vUni,valor:val>0?val:(qtd*vUni),cat:''});
+      }
+      if(r.itens.length>0) break;
+    }
+  }catch(e){ console.error('NF-e parse:',e); }
   return r;
 }
 
 function nfeAplicarDados(dados){
-  document.getElementById('nfe-fornecedor').value = dados.fornecedor||'';
+  document.getElementById('nfe-fornecedor').value = dados.nomeFantasia||dados.fornecedor||'';
   document.getElementById('nfe-valor').value       = dados.valor>0 ? dados.valor.toFixed(2) : '';
   document.getElementById('nfe-data').value         = dados.data||hoje;
   document.getElementById('nfe-limpar-btn').style.display='block';
-  if(dados.cnpj){ document.getElementById('nfe-cnpj-bar').style.display='block'; document.getElementById('nfe-cnpj-valor').textContent=nfeFmtCNPJ(dados.cnpj); }
-  const obs=[dados.fonte==='sefaz'?'✅ SEFAZ':'📋 QR Code',dados.chave?`Chave: ${dados.chave.substring(0,20)}...`:'',dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:''].filter(Boolean).join(' | ');
+
+  if(dados.cnpj){
+    document.getElementById('nfe-cnpj-bar').style.display='block';
+    document.getElementById('nfe-cnpj-valor').textContent=nfeFmtCNPJ(dados.cnpj);
+  }
+
+  // Observação com rastreabilidade
+  const obs=[
+    dados.fonte==='sefaz'?'✅ SEFAZ':'📋 QR Code',
+    dados.nomeFantasia?`Fantasia: ${dados.nomeFantasia}`:'',
+    dados.fornecedor&&dados.nomeFantasia?`Razão: ${dados.fornecedor}`:'',
+    dados.chave?`Chave: ${dados.chave.substring(0,20)}...`:'',
+    dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:'',
+  ].filter(Boolean).join(' | ');
   document.getElementById('nfe-obs').value=obs;
-  // Cruza com fornecedor cadastrado
-  if(dados.fornecedor||dados.cnpj){
+
+  // Cruza com fornecedor cadastrado pelo nome ou CNPJ
+  if(dados.fornecedor||dados.nomeFantasia||dados.cnpj){
+    const busca=(dados.nomeFantasia||dados.fornecedor||'').toLowerCase();
     const found=(DB.fornecedores||[]).find(f=>{
-      const nOk=dados.fornecedor&&(f.nome.toLowerCase().includes(dados.fornecedor.toLowerCase().substring(0,8))||dados.fornecedor.toLowerCase().includes(f.nome.toLowerCase().substring(0,8)));
+      const nOk=busca&&(
+        f.nome.toLowerCase().includes(busca.substring(0,8))||
+        busca.includes(f.nome.toLowerCase().substring(0,8))
+      );
       const cOk=dados.cnpj&&f.doc&&f.doc.replace(/\D/g,'')===dados.cnpj.replace(/\D/g,'');
       return nOk||cOk;
     });
-    if(found){ document.getElementById('nfe-forn-select').value=found.nome; }
+    if(found) document.getElementById('nfe-forn-select').value=found.nome;
   }
-  document.getElementById('nfe-result-subtitle').textContent=dados.fornecedor||(dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:'Nota lida');
-  if(dados.valor>0&&dados.fornecedor) nfeStatusOk(`Nota lida — ${dados.fornecedor} · ${fmt(dados.valor)}`);
-  else if(dados.valor>0) nfeStatusAviso(`Valor: ${fmt(dados.valor)} — confirme o fornecedor`);
-  else nfeStatusAviso('QR Code lido — preencha o valor manualmente.');
+
+  document.getElementById('nfe-result-subtitle').textContent =
+    dados.nomeFantasia||dados.fornecedor||(dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:'Nota lida');
+
+  // ── Renderiza tabela de itens ──
+  nfeRenderItens(dados.itens||[]);
+
+  // Status
+  if(dados.valor>0&&(dados.fornecedor||dados.nomeFantasia)){
+    nfeStatusOk(`${dados.nomeFantasia||dados.fornecedor} — ${fmt(dados.valor)}${dados.itens?.length?` · ${dados.itens.length} iten(s)`:''}`);
+  } else if(dados.valor>0){
+    nfeStatusAviso(`Valor: ${fmt(dados.valor)} — confirme o fornecedor`);
+  } else {
+    nfeStatusAviso('QR Code lido — preencha o valor e verifique os itens.');
+  }
+
   nfeHistorico.unshift({...dados,ts:Date.now()});
   if(nfeHistorico.length>5) nfeHistorico.pop();
   nfeRenderHistorico();
 }
 
+// ── Renderiza tabela de itens com categorização por item ──
+function nfeRenderItens(itens){
+  // Remove tabela antiga se existir
+  const old=document.getElementById('nfe-itens-wrap');
+  if(old) old.remove();
+  if(!itens||!itens.length) return;
+
+  const catOpts=(DB.tiposDesp||[]).map(t=>`<option value="${t.nome}">${t.nome}</option>`).join('');
+
+  const wrap=document.createElement('div');
+  wrap.id='nfe-itens-wrap';
+  wrap.style.cssText='margin-bottom:16px;';
+  wrap.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">
+        📦 Itens da Nota (${itens.length})
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:var(--muted)">Cat. padrão:</span>
+        <select id="nfe-cat-todos" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:7px;padding:4px 8px;color:var(--text);font-size:12px;" onchange="nfeAplicarCatTodos(this.value)">
+          <option value="">— Aplicar a todos —</option>
+          ${catOpts}
+        </select>
+      </div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        <thead>
+          <tr style="background:var(--card2);">
+            <th style="padding:9px 12px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Descrição</th>
+            <th style="padding:9px 8px;text-align:center;color:var(--muted);font-size:11px;white-space:nowrap;">Qtd</th>
+            <th style="padding:9px 8px;text-align:center;color:var(--muted);font-size:11px;">Un.</th>
+            <th style="padding:9px 8px;text-align:right;color:var(--muted);font-size:11px;white-space:nowrap;">Vl. Unit.</th>
+            <th style="padding:9px 8px;text-align:right;color:var(--green);font-size:11px;">Total</th>
+            <th style="padding:9px 8px;text-align:left;color:var(--muted);font-size:11px;">Categoria</th>
+          </tr>
+        </thead>
+        <tbody id="nfe-itens-tbody">
+          ${itens.map((it,i)=>`
+            <tr style="border-top:1px solid rgba(255,255,255,.04);">
+              <td style="padding:9px 12px;font-weight:500;">${it.descricao}</td>
+              <td style="padding:9px 8px;text-align:center;color:var(--muted);">${it.qtd.toLocaleString('pt-BR',{maximumFractionDigits:4})}</td>
+              <td style="padding:9px 8px;text-align:center;color:var(--muted);">${it.unidade}</td>
+              <td style="padding:9px 8px;text-align:right;color:var(--muted);">${fmt(it.vUnit)}</td>
+              <td style="padding:9px 8px;text-align:right;font-weight:700;color:var(--green);">${fmt(it.valor)}</td>
+              <td style="padding:6px 8px;">
+                <select class="nfe-item-cat" data-idx="${i}"
+                  style="width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:7px;padding:5px 6px;color:var(--text);font-size:11.5px;"
+                  onchange="nfeItens[${i}].cat=this.value">
+                  <option value="">— Categoria —</option>
+                  ${catOpts}
+                </select>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:rgba(46,204,113,.06);border-top:2px solid rgba(46,204,113,.2);">
+            <td colspan="4" style="padding:10px 12px;font-weight:700;color:var(--muted);">TOTAL</td>
+            <td style="padding:10px 8px;text-align:right;font-weight:800;font-size:14px;color:var(--green);">${fmt(itens.reduce((a,it)=>a+it.valor,0))}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(244,162,97,.07);border-radius:8px;font-size:12px;color:var(--muted);">
+      💡 Cada item com categoria selecionada será lançado como uma <strong style="color:var(--accent)">despesa separada</strong>. Itens sem categoria usarão a categoria padrão acima.
+    </div>`;
+
+  // Insere antes do botão salvar
+  const btnSalvar=document.getElementById('nfe-salvar-btn');
+  btnSalvar.parentNode.insertBefore(wrap, btnSalvar);
+
+  // Salva referência dos itens no escopo global para leitura no save
+  window.nfeItens = itens.map(it=>({...it}));
+
+  // Atualiza label do botão salvar
+  const btnSalvar = document.getElementById('nfe-salvar-btn');
+  if(btnSalvar) btnSalvar.innerHTML = `💾 Lançar ${itens.length} item${itens.length!==1?'s':''} separados`;
+}
+
+function nfeAplicarCatTodos(cat){
+  if(!cat) return;
+  (window.nfeItens||[]).forEach(it=>it.cat=cat);
+  document.querySelectorAll('.nfe-item-cat').forEach(sel=>sel.value=cat);
+}
+
 function nfeSalvarLancamento(){
-  const valor=parseFloat(document.getElementById('nfe-valor').value);
-  const data=document.getElementById('nfe-data').value;
-  const conta=document.getElementById('nfe-conta').value;
-  if(!valor||!data||!conta){ notify('Preencha Valor, Data e Conta.',true); return; }
-  const forn=document.getElementById('nfe-fornecedor').value.trim();
-  const fornSel=document.getElementById('nfe-forn-select').value;
-  const desc=forn?`NF-e — ${forn}`:'NF-e — Fornecedor';
-  const lanc={id:newId(),tipo:'Despesa',desc,valor,data,cat:document.getElementById('nfe-cat').value||'Fornecedores',status:document.getElementById('nfe-status-lanc').value,conta,forma:document.getElementById('nfe-forma').value,entidade:fornSel||forn,obs:document.getElementById('nfe-obs').value};
-  if(!DB.lancamentos) DB.lancamentos=[];
-  DB.lancamentos.push(lanc);
-  salvarDB('lancamentos',DB.lancamentos);
-  updateBadge();
-  criarNotificacao('despesa','NF-e lançada',`${desc} · ${conta}`,fmt(valor));
-  notify('NF-e lançada como despesa! ✅');
+  const data   = document.getElementById('nfe-data').value;
+  const conta  = document.getElementById('nfe-conta').value;
+  const status = document.getElementById('nfe-status-lanc').value;
+  const forma  = document.getElementById('nfe-forma').value;
+  const forn   = document.getElementById('nfe-fornecedor').value.trim();
+  const fornSel= document.getElementById('nfe-forn-select').value;
+  const catPad = document.getElementById('nfe-cat').value || 'Fornecedores';
+  const obs    = document.getElementById('nfe-obs').value;
+
+  if(!data||!conta){ notify('Preencha Data e Conta.',true); return; }
+
+  const itens = window.nfeItens||[];
+
+  if(itens.length > 0){
+    // ── LANÇA POR ITEM ──
+    const semCat = itens.filter(it=>!it.cat);
+    if(semCat.length > 0 && !catPad){
+      notify(`${semCat.length} item(s) sem categoria. Selecione a categoria padrão acima.`, true);
+      return;
+    }
+    if(!DB.lancamentos) DB.lancamentos=[];
+    let total = 0;
+    itens.forEach((it,i)=>{
+      const cat = it.cat || catPad;
+      const valorItem = it.valor > 0 ? it.valor : it.qtd * it.vUnit;
+      if(valorItem <= 0) return;
+      const descItem = forn
+        ? `NF-e ${forn} — ${it.descricao}`
+        : `NF-e — ${it.descricao}`;
+      DB.lancamentos.push({
+        id: newId()+i,
+        tipo: 'Despesa',
+        desc: descItem,
+        valor: valorItem,
+        data, cat, status, conta, forma,
+        entidade: fornSel||forn,
+        obs: `${it.qtd}${it.unidade} × ${fmt(it.vUnit)} | ${obs}`,
+      });
+      total += valorItem;
+    });
+    salvarDB('lancamentos', DB.lancamentos);
+    updateBadge();
+    criarNotificacao('despesa',`NF-e — ${itens.length} itens lançados`,`${forn||'Fornecedor'} · ${conta}`,fmt(total));
+    notify(`✅ ${itens.length} itens lançados como despesas! Total: ${fmt(total)}`);
+
+  } else {
+    // ── LANÇA O TOTAL (sem itens extraídos) ──
+    const valor = parseFloat(document.getElementById('nfe-valor').value);
+    if(!valor){ notify('Preencha o Valor.',true); return; }
+    if(!DB.lancamentos) DB.lancamentos=[];
+    const desc = forn ? `NF-e — ${forn}` : 'NF-e — Fornecedor';
+    DB.lancamentos.push({
+      id: newId(), tipo:'Despesa', desc, valor, data,
+      cat: catPad, status, conta, forma,
+      entidade: fornSel||forn, obs,
+    });
+    salvarDB('lancamentos', DB.lancamentos);
+    updateBadge();
+    criarNotificacao('despesa','NF-e lançada',`${desc} · ${conta}`,fmt(valor));
+    notify('NF-e lançada como despesa! ✅');
+  }
   nfeLimpar();
 }
 
 function nfeLimpar(){
   ['nfe-fornecedor','nfe-valor','nfe-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('nfe-data').value=hoje;
-  document.getElementById('nfe-cnpj-bar').style.display='none';
-  document.getElementById('nfe-limpar-btn').style.display='none';
-  document.getElementById('nfe-result-subtitle').textContent='Leia um QR Code para preencher';
+  document.getElementById('nfe-data').value = hoje;
+  document.getElementById('nfe-cnpj-bar').style.display   = 'none';
+  document.getElementById('nfe-limpar-btn').style.display = 'none';
+  document.getElementById('nfe-result-subtitle').textContent = 'Leia um QR Code para preencher';
+  // Remove tabela de itens se existir
+  const itensWrap = document.getElementById('nfe-itens-wrap');
+  if(itensWrap) itensWrap.remove();
+  window.nfeItens = [];
   nfeStatusOcultar();
 }
 
