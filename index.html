@@ -1107,97 +1107,105 @@ function setSyncStatus(status){
 window.addEventListener('load', async () => {
   showLoading(true);
 
-  // Timeout de segurança — se Firebase travar por mais de 8s, cai no modo offline
-  const timeoutId = setTimeout(() => {
-    console.warn('⏱ Firebase timeout — iniciando modo offline');
-    carregarLocal();
-    setSyncStatus('offline');
+  // Garante que a tela de loading SEMPRE some após 10s no máximo
+  const hardTimeout = setTimeout(() => {
+    console.warn('⏱ Hard timeout — forçando exibição da tela de login');
     showLoading(false);
     document.getElementById('login-screen').classList.add('show');
-  }, 8000);
+  }, 10000);
+
+  const finalizar = () => {
+    clearTimeout(hardTimeout);
+    showLoading(false);
+  };
 
   try {
-    // Inicializa Firebase apenas uma vez
-    if(!firebase.apps.length){
-      firebase.initializeApp(FIREBASE_CONFIG);
-    }
+    // 1. Inicializa Firebase
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     db   = firebase.firestore();
     auth = firebase.auth();
 
-    // Cache offline — não aguarda (não bloqueia o init)
-    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    // 2. Cache offline — NÃO aguarda, dispara em background
+    db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 
-    // Autenticação anônima com timeout individual
-    const authPromise = auth.signInAnonymously();
-    const authTimeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('Auth timeout')), 6000));
-    await Promise.race([authPromise, authTimeout]);
+    // 3. Auth anônima — timeout de 5s
+    try {
+      await Promise.race([
+        auth.signInAnonymously(),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('auth-timeout')),5000))
+      ]);
+    } catch(authErr){
+      console.warn('Auth anônimo falhou:', authErr.message);
+      // Continua mesmo sem auth — tenta usar cache do Firestore
+    }
 
-    // Carrega dados do Firestore com timeout individual
-    const loadPromise = carregarFirestore();
-    const loadTimeout = new Promise((_,reject) => setTimeout(()=>reject(new Error('Firestore timeout')), 6000));
-    await Promise.race([loadPromise, loadTimeout]);
+    // 4. Carrega dados — timeout de 5s, fallback para local
+    try {
+      await Promise.race([
+        carregarFirestore(),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('load-timeout')),5000))
+      ]);
+    } catch(loadErr){
+      console.warn('Firestore load falhou:', loadErr.message, '— usando cache local');
+      if(!DB.funcionarios?.length) carregarLocal();
+    }
 
-    clearTimeout(timeoutId);
     setSyncStatus('ok');
 
-    // Listeners em tempo real
+    // 5. Listeners realtime — não bloqueia o init
     const colsRealtime = ['lancamentos','contas','funcionarios','pgtoRH'];
     colsRealtime.forEach(col => {
-      db.collection(col).onSnapshot(snap => {
-        DB[col] = snap.docs.map(d => {
-          const data = d.data();
-          const id = isNaN(d.id) ? d.id : parseInt(d.id);
-          return {...data, id};
-        });
-        if(col === 'lancamentos') updateBadge();
-        const sec = document.querySelector('.section.active');
-        if(sec){
-          const name = sec.id.replace('sec-','');
-          const relevante = {
-            lancamentos: ['dashboard','caixa','lancamentos','contas-pagar','contas-receber','fluxo','dre','relatorio'],
-            contas:      ['dashboard','caixa','contas-banco','fluxo','dre','relatorio'],
-            funcionarios:['rh'],
-            pgtoRH:      ['rh','dre','relatorio'],
-          };
-          if((relevante[col]||[]).includes(name)) renderSection(name);
-        }
-      }, err => console.warn(`Listener erro ${col}:`, err));
+      try {
+        db.collection(col).onSnapshot(snap => {
+          DB[col] = snap.docs.map(d => {
+            const id = isNaN(d.id) ? d.id : parseInt(d.id);
+            return {...d.data(), id};
+          });
+          if(col==='lancamentos') updateBadge();
+          const sec = document.querySelector('.section.active');
+          if(sec){
+            const name = sec.id.replace('sec-','');
+            const rel = {
+              lancamentos:['dashboard','caixa','lancamentos','contas-pagar','contas-receber','fluxo','dre','relatorio'],
+              contas:     ['dashboard','caixa','contas-banco','fluxo','dre','relatorio'],
+              funcionarios:['rh'], pgtoRH:['rh','dre','relatorio'],
+            };
+            if((rel[col]||[]).includes(name)) renderSection(name);
+          }
+        }, err => console.warn(`Listener ${col}:`, err.message));
+      } catch(e){ console.warn('Listener setup falhou:', col); }
     });
 
-    // Verifica sessão salva
+    // 6. Verifica sessão salva
     const sessaoSalva = sessionStorage.getItem('lanchonet_user') || localStorage.getItem('lanchonet_user');
     if(sessaoSalva){
-      try{
+      try {
         const userSalvo = JSON.parse(sessaoSalva);
-        const funcAtual = (DB.funcionarios||[]).find(f => f.id === userSalvo.id && f.status === 'Ativo');
+        const funcAtual = (DB.funcionarios||[]).find(f => f.id===userSalvo.id && f.status==='Ativo');
         if(funcAtual){
           currentUser = funcAtual;
           sessionStorage.setItem('lanchonet_user', JSON.stringify(funcAtual));
           localStorage.setItem('lanchonet_user', JSON.stringify(funcAtual));
-          showLoading(false);
+          finalizar();
           applyPermissions(); renderSidebar(); populateContaSelects(); renderDashboard();
           iniciarListenerNotificacoes();
-          return;
-        } else {
-          sessionStorage.removeItem('lanchonet_user');
-          localStorage.removeItem('lanchonet_user');
+          return; // entra direto sem login
         }
-      } catch(e){
-        sessionStorage.removeItem('lanchonet_user');
-        localStorage.removeItem('lanchonet_user');
-      }
+      } catch(e){}
+      sessionStorage.removeItem('lanchonet_user');
+      localStorage.removeItem('lanchonet_user');
     }
 
   } catch(e) {
-    clearTimeout(timeoutId);
-    console.error('Firebase error:', e.message);
-    // Se Firestore falhou mas auth funcionou, tenta usar dados locais como fallback
-    if(!DB.funcionarios || !DB.funcionarios.length) carregarLocal();
+    console.error('Firebase init error:', e.message);
+    if(!DB.funcionarios?.length) carregarLocal();
     setSyncStatus('offline');
   }
 
-  showLoading(false);
+  // Sempre mostra a tela de login se não entrou direto pela sessão
+  finalizar();
   document.getElementById('login-screen').classList.add('show');
+});
 });
 
 // ── Persistência local (fallback offline) ──
