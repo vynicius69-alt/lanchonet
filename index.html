@@ -800,6 +800,31 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
               <input type="file" id="nfe-img-input" accept="image/*" capture="environment" style="display:none" onchange="nfeProcessImage(event)">
             </div>
 
+            <!-- Chave de acesso manual -->
+            <div class="nfe-divider">ou informe a chave manualmente</div>
+            <div style="background:var(--card2);border-radius:10px;padding:16px;">
+              <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+                🔑 Chave de Acesso (44 dígitos)
+              </div>
+              <div style="display:flex;gap:8px;">
+                <input
+                  class="form-input"
+                  id="nfe-chave-manual"
+                  placeholder="Ex: 26260723730795000199650050003540101012402809"
+                  maxlength="44"
+                  inputmode="numeric"
+                  oninput="nfeChaveInput(this)"
+                  style="font-family:monospace;font-size:12px;letter-spacing:1px;flex:1;"
+                >
+                <button class="btn btn-primary btn-sm" onclick="nfeConsultarChave()" id="nfe-chave-btn" style="white-space:nowrap;" disabled>
+                  🔍 Consultar
+                </button>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:8px;" id="nfe-chave-info">
+                Digite os 44 dígitos numéricos da chave de acesso impressa na nota
+              </div>
+            </div>
+
             <!-- Histórico de leituras -->
             <div id="nfe-historico-wrap" style="margin-top:20px;display:none;">
               <div style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Leituras recentes</div>
@@ -3534,6 +3559,106 @@ function nfeLimpar(){
   if(itensWrap) itensWrap.remove();
   window.nfeItens = [];
   nfeStatusOcultar();
+}
+
+function nfeChaveInput(el){
+  // Remove tudo que não for número
+  const numeros = el.value.replace(/\D/g,'').substring(0,44);
+  el.value = numeros;
+  const btn  = document.getElementById('nfe-chave-btn');
+  const info = document.getElementById('nfe-chave-info');
+  const qtd  = numeros.length;
+
+  if(qtd === 44){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    // Extrai info prévia da chave sem consultar a SEFAZ
+    const uf   = numeros.substring(0,2);
+    const cnpj = numeros.substring(6,20);
+    const ano  = '20'+numeros.substring(2,4);
+    const mes  = numeros.substring(4,6);
+    const ufMap = {'26':'PE','35':'SP','33':'RJ','31':'MG','41':'PR','43':'RS','29':'BA','23':'CE','13':'AM','15':'PA'};
+    info.innerHTML = `✅ Chave válida &nbsp;·&nbsp; UF: <strong>${ufMap[uf]||uf}</strong> &nbsp;·&nbsp; CNPJ: <strong>${nfeFmtCNPJ(cnpj)}</strong> &nbsp;·&nbsp; Emissão: <strong>${mes}/${ano}</strong>`;
+    info.style.color = 'var(--green)';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    const faltam = 44 - qtd;
+    info.textContent = qtd > 0 ? `Faltam ${faltam} dígito${faltam!==1?'s':''}` : 'Digite os 44 dígitos numéricos da chave de acesso impressa na nota';
+    info.style.color = 'var(--muted)';
+  }
+}
+
+async function nfeConsultarChave(){
+  const chave = document.getElementById('nfe-chave-manual').value.replace(/\D/g,'');
+  if(chave.length !== 44){
+    notify('A chave de acesso deve ter exatamente 44 dígitos.', true);
+    return;
+  }
+
+  // Cache — não consulta a mesma nota duas vezes
+  if(nfeCache[chave]){
+    nfeAplicarDados(nfeCache[chave]);
+    nfeStatusOk('Dados carregados do cache desta sessão.');
+    return;
+  }
+
+  nfeStatusLoad('Consultando SEFAZ-PE com a chave de acesso...');
+  document.getElementById('nfe-chave-btn').disabled = true;
+
+  // Monta URL de consulta da SEFAZ-PE
+  const urlSefaz = `https://nfce.sefaz.pe.gov.br/nfce-web/consNfce?tp=C&chave=${chave}`;
+
+  // Extrai dados iniciais direto da chave (sem consulta)
+  const dadosChave = {
+    chave,
+    urlOriginal: urlSefaz,
+    valor:       0,
+    data:        `20${chave.substring(2,4)}-${chave.substring(4,6)}-${chave.substring(6,8)}`,
+    fornecedor:  '',
+    nomeFantasia:'',
+    cnpj:        chave.substring(6,20),
+    itens:       [],
+    fonte:       'chave',
+  };
+
+  // Tenta consultar via proxy CORS
+  let dadosSefaz = null;
+  try {
+    const proxy = `https://corsproxy.io/?${encodeURIComponent(urlSefaz)}`;
+    const resp  = await Promise.race([
+      fetch(proxy),
+      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),10000))
+    ]);
+    if(resp.ok){
+      const html = await resp.text();
+      dadosSefaz = nfeParseHTML(html, chave, urlSefaz);
+    }
+  } catch(e){
+    console.warn('SEFAZ chave consulta:', e.message);
+  }
+
+  // Mescla dados — prioriza SEFAZ
+  const dados = {
+    chave,
+    urlOriginal: urlSefaz,
+    valor:       dadosSefaz?.valor      > 0 ? dadosSefaz.valor      : dadosChave.valor,
+    data:        dadosSefaz?.data           ? dadosSefaz.data        : dadosChave.data,
+    fornecedor:  dadosSefaz?.fornecedor     ? dadosSefaz.fornecedor  : '',
+    nomeFantasia:dadosSefaz?.nomeFantasia   ? dadosSefaz.nomeFantasia: '',
+    cnpj:        dadosSefaz?.cnpj           ? dadosSefaz.cnpj        : dadosChave.cnpj,
+    itens:       dadosSefaz?.itens?.length  ? dadosSefaz.itens       : [],
+    fonte:       dadosSefaz?.valor > 0      ? 'sefaz'                : 'chave',
+  };
+
+  nfeCache[chave] = dados;
+  nfeAplicarDados(dados);
+
+  // Limpa o campo e restaura botão
+  document.getElementById('nfe-chave-manual').value = '';
+  document.getElementById('nfe-chave-btn').disabled = false;
+  document.getElementById('nfe-chave-info').textContent = 'Digite os 44 dígitos numéricos da chave de acesso impressa na nota';
+  document.getElementById('nfe-chave-info').style.color = 'var(--muted)';
 }
 
 function nfeRenderHistorico(){
