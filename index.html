@@ -800,28 +800,24 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
               <input type="file" id="nfe-img-input" accept="image/*" capture="environment" style="display:none" onchange="nfeProcessImage(event)">
             </div>
 
+            <div class="nfe-divider">ou</div>
+
             <!-- Chave de acesso manual -->
-            <div class="nfe-divider">ou informe a chave manualmente</div>
-            <div style="background:var(--card2);border-radius:10px;padding:16px;">
-              <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-                🔑 Chave de Acesso (44 dígitos)
-              </div>
+            <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px;">
+              <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">🔑 Digitar Chave de Acesso</div>
               <div style="display:flex;gap:8px;">
-                <input
-                  class="form-input"
-                  id="nfe-chave-manual"
-                  placeholder="Ex: 26260723730795000199650050003540101012402809"
-                  maxlength="44"
-                  inputmode="numeric"
+                <input class="form-input" id="nfe-chave-input"
+                  placeholder="44 dígitos numéricos da NF-e"
+                  inputmode="numeric" maxlength="44"
+                  style="font-family:monospace;font-size:13px;letter-spacing:1px;flex:1;"
                   oninput="nfeChaveInput(this)"
-                  style="font-family:monospace;font-size:12px;letter-spacing:1px;flex:1;"
-                >
-                <button class="btn btn-primary btn-sm" onclick="nfeConsultarChave()" id="nfe-chave-btn" style="white-space:nowrap;" disabled>
-                  🔍 Consultar
+                  onkeydown="if(event.key==='Enter') nfeConsultarChave()">
+                <button class="btn btn-primary btn-sm" onclick="nfeConsultarChave()" style="white-space:nowrap;">
+                  Consultar
                 </button>
               </div>
-              <div style="font-size:11px;color:var(--muted);margin-top:8px;" id="nfe-chave-info">
-                Digite os 44 dígitos numéricos da chave de acesso impressa na nota
+              <div style="font-size:11px;color:var(--muted);margin-top:7px;" id="nfe-chave-counter">
+                0 / 44 dígitos
               </div>
             </div>
 
@@ -3171,182 +3167,190 @@ async function nfeProcessImage(evt){
   nfeStatusErro('QR Code não encontrado na imagem. Tente uma foto mais nítida e bem iluminada.');
 }
 
-async function nfeProcessarURL(rawValue){
+async function nfeProcessarURL(rawValue, chaveOverride){
   nfeCameraStop();
-  nfeStatusLoad('QR Code lido! Consultando dados da nota...');
-  let chave='', urlOriginal=rawValue;
-  try{
-    const url=new URL(rawValue);
-    // SEFAZ-PE usa parâmetro "chave" (não "chNFe")
-    chave = url.searchParams.get('chave')
-          ||url.searchParams.get('chNFe')
-          ||url.searchParams.get('nfe')
-          ||url.searchParams.get('c')||'';
-    const paramP=url.searchParams.get('p')||'';
-    if(!chave&&paramP) chave=paramP.split('|')[0];
-  }catch(e){}
-  if(!chave) chave=rawValue.replace(/\D/g,'').substring(0,44);
-  if(chave&&nfeCache[chave]){ nfeAplicarDados(nfeCache[chave]); nfeStatusOk('Dados carregados do cache.'); return; }
+  nfeStatusLoad('Consultando dados da nota na SEFAZ-PE...');
 
-  const dadosURL=nfeExtrairDaURL(rawValue,chave);
-  let dadosSefaz=null;
-  // Tenta múltiplos proxies CORS
-  const proxies=[
-    `https://corsproxy.io/?${encodeURIComponent(rawValue)}`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(rawValue)}`,
+  // Extrai a chave de 44 dígitos
+  let chave = chaveOverride || '';
+  if(!chave){
+    try{
+      const url = new URL(rawValue);
+      // Sefaz-PE usa ?chave= ou ?p=CHAVE|...
+      chave = url.searchParams.get('chave')
+            ||url.searchParams.get('chNFe')
+            ||url.searchParams.get('c')   ||'';
+      const p = url.searchParams.get('p')||'';
+      if(!chave && p) chave = p.split('|')[0];
+    }catch(e){}
+    if(!chave) chave = rawValue.replace(/\D/g,'').substring(0,44);
+  }
+
+  // Cache — não consulta a mesma nota duas vezes
+  if(chave && nfeCache[chave]){
+    nfeAplicarDados(nfeCache[chave]);
+    nfeStatusOk('Dados carregados do cache.');
+    return;
+  }
+
+  // Dados extraídos da URL como fallback
+  const dadosURL = nfeExtrairDaURL(rawValue, chave);
+
+  // URL de consulta DANFE (seletor confirmado no HTML real)
+  const urlSefaz = chave
+    ? `https://nfce.sefaz.pe.gov.br/nfce-web/consNfce?tp=C&chave=${chave}`
+    : rawValue;
+
+  let dadosSefaz = null;
+  // Tenta dois proxies CORS em sequência
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(urlSefaz)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(urlSefaz)}`,
   ];
   for(const proxy of proxies){
     try{
-      const resp=await Promise.race([fetch(proxy),new Promise((_,r)=>setTimeout(()=>r(new Error('t')),10000))]);
+      const resp = await Promise.race([
+        fetch(proxy),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),10000))
+      ]);
       if(resp.ok){
-        let html=await resp.text();
-        if(proxy.includes('allorigins')){ try{html=JSON.parse(html).contents;}catch(e){} }
-        dadosSefaz=nfeParseHTML(html,chave,rawValue);
-        if(dadosSefaz.valor>0||dadosSefaz.itens?.length>0) break;
+        let html = await resp.text();
+        // allorigins retorna JSON com .contents
+        if(proxy.includes('allorigins')){ try{ html = JSON.parse(html).contents; }catch(e){} }
+        dadosSefaz = nfeParseHTML(html, chave, rawValue);
+        if(dadosSefaz.fornecedor || dadosSefaz.valor > 0 || dadosSefaz.itens.length > 0) break;
       }
-    }catch(e){ console.warn('Proxy:',e.message); }
+    }catch(e){ console.warn('Proxy falhou:', e.message); }
   }
-  const dados={
-    chave, urlOriginal,
-    valor:       dadosSefaz?.valor>0    ? dadosSefaz.valor      : dadosURL.valor,
-    data:        dadosSefaz?.data       ? dadosSefaz.data        : dadosURL.data,
-    fornecedor:  dadosSefaz?.fornecedor ? dadosSefaz.fornecedor  : dadosURL.fornecedor,
-    nomeFantasia:dadosSefaz?.nomeFantasia||'',
-    cnpj:        dadosSefaz?.cnpj       ? dadosSefaz.cnpj        : dadosURL.cnpj,
-    itens:       dadosSefaz?.itens      ||[],
-    fonte:       dadosSefaz?.valor>0    ? 'sefaz'                : 'url',
+
+  // Mescla: prioriza SEFAZ, cai para URL
+  const dados = {
+    chave,
+    urlOriginal: rawValue,
+    valor:        dadosSefaz?.valor > 0       ? dadosSefaz.valor        : dadosURL.valor,
+    data:         dadosSefaz?.data            ? dadosSefaz.data          : dadosURL.data,
+    fornecedor:   dadosSefaz?.fornecedor      ? dadosSefaz.fornecedor    : dadosURL.fornecedor,
+    nomeFantasia: dadosSefaz?.nomeFantasia    ||'',
+    cnpj:         dadosSefaz?.cnpj            ? dadosSefaz.cnpj          : dadosURL.cnpj,
+    formaPgto:    dadosSefaz?.formaPgto       ||'',
+    itens:        dadosSefaz?.itens?.length   ? dadosSefaz.itens         : [],
+    fonte:        dadosSefaz?.valor > 0       ? 'sefaz'                  : 'url',
   };
-  if(chave) nfeCache[chave]=dados;
+
+  if(chave) nfeCache[chave] = dados;
   nfeAplicarDados(dados);
 }
 
-function nfeExtrairDaURL(urlStr,chave){
-  const r={chave,valor:0,data:hoje,fornecedor:'',nomeFantasia:'',cnpj:'',itens:[]};
+// ── Extrai dados básicos diretamente da URL do QR Code ──
+function nfeExtrairDaURL(urlStr, chave){
+  const r = {chave, valor:0, data:hoje, fornecedor:'', nomeFantasia:'', cnpj:'', formaPgto:'', itens:[]};
   try{
-    const url=new URL(urlStr);
-    const p=url.searchParams.get('p')||'';
+    // QR Code SEFAZ-PE: ?p=CHAVE|2|1|1|HASH  ou  ?chave=CHAVE
+    const url = new URL(urlStr);
+    const p   = url.searchParams.get('p')||'';
     if(p.includes('|')){
-      const pts=p.split('|');
-      const ds=(pts[1]||'').trim();
-      const dm=ds.match(/(\d{4})-?(\d{2})-?(\d{2})/);
-      if(dm) r.data=`${dm[1]}-${dm[2]}-${dm[3]}`;
-      for(let i=2;i<=4;i++){
-        const raw=(pts[i]||'').replace(',','.');
-        const v=parseFloat(raw);
-        if(v>0&&v<999999&&raw.includes('.')){ r.valor=v; break; }
-      }
-      if(!r.valor){
-        for(let j=2;j<=4;j++){
-          const vj=parseFloat((pts[j]||'').replace(',','.'));
-          if(vj>1&&vj<999999&&vj!==Math.floor(vj)){ r.valor=vj; break; }
-        }
-      }
+      const pts = p.split('|');
+      // pts[0] = chave 44 dígitos
+      if(!chave && pts[0]?.length===44) chave = pts[0];
     }
-    if(chave&&chave.length===44) r.cnpj=chave.substring(6,20);
+    // Extrai CNPJ da chave (posições 6-19)
+    if(chave && chave.length===44) r.cnpj = chave.substring(6,20);
+    // Extrai data da chave (posições 2-9: AAMMDDHH → só AAAMMDD útil)
+    if(chave && chave.length===44){
+      const ano  = '20' + chave.substring(2,4);
+      const mes  = chave.substring(4,6);
+      const dia  = chave.substring(6,8);
+      if(parseInt(mes)>=1&&parseInt(mes)<=12) r.data = `${ano}-${mes}-${dia}`;
+    }
   }catch(e){}
   return r;
 }
 
-function nfeParseHTML(html,chave,urlOriginal){
-  const r={chave,urlOriginal,valor:0,data:hoje,fornecedor:'',nomeFantasia:'',cnpj:'',itens:[],fonte:'sefaz'};
+// ── Parser do HTML DANFE real da SEFAZ-PE ──
+// Seletores confirmados pelo arquivo sefaz_html.txt:
+//   div.txtTopo       → Razão Social
+//   texto "CNPJ: XX"  → CNPJ
+//   table#tabResult    → Itens (span.txtTit, .Rqtd, .RUN, .RvlUnit, .valor)
+//   .totalNumb.txtMax  → Valor total
+//   label.tx           → Forma de pagamento
+//   "Data de Emissão:" → Data
+function nfeParseHTML(html, chave, urlOriginal){
+  const r = {chave, urlOriginal, valor:0, data:hoje, fornecedor:'', nomeFantasia:'', cnpj:'', formaPgto:'', itens:[], fonte:'sefaz'};
   try{
-    const doc=new DOMParser().parseFromString(html,'text/html');
-    const txt=doc.body?.innerText||doc.body?.textContent||'';
-    const allLabels=doc.querySelectorAll('label');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const txt = doc.body?.innerText || doc.body?.textContent || '';
 
-    // ── RAZÃO SOCIAL e NOME FANTASIA ──
-    for(const label of allLabels){
-      const lt=label.textContent.toLowerCase();
-      if(lt.includes('razão social')||lt.includes('razao social')||lt.includes('nome / razão')){
-        let nx=label.nextElementSibling;
-        while(nx&&!['INPUT','TEXTAREA'].includes(nx.tagName)) nx=nx.nextElementSibling;
-        if(nx){ const vv=(nx.value||nx.textContent||'').trim(); if(vv.length>2) r.fornecedor=vv; }
-      }
-      if(lt.includes('nome fantasia')||lt.includes('fantasia')){
-        let nx2=label.nextElementSibling;
-        while(nx2&&!['INPUT','TEXTAREA'].includes(nx2.tagName)) nx2=nx2.nextElementSibling;
-        if(nx2){ const vv2=(nx2.value||nx2.textContent||'').trim(); if(vv2.length>2) r.nomeFantasia=vv2; }
-      }
+    // ── RAZÃO SOCIAL ── confirmado: div.txtTopo
+    const elNome = doc.querySelector('.txtTopo');
+    if(elNome) r.fornecedor = elNome.textContent.trim();
+
+    // ── CNPJ ── confirmado: texto "CNPJ: XX.XXX.XXX/XXXX-XX"
+    const mCNPJ = txt.match(/CNPJ[:\s]*([\d]{2}\.[\d]{3}\.[\d]{3}\/[\d]{4}-[\d]{2})/);
+    if(mCNPJ) r.cnpj = mCNPJ[1].replace(/\D/g,'');
+    if(!r.cnpj && chave?.length===44) r.cnpj = chave.substring(6,20);
+
+    // ── DATA ── confirmado: "Data de Emissão: DD/MM/AAAA HH:MM:SS"
+    const mData = txt.match(/Data de Emiss[ãa]o[:\s]*(\d{2})\/(\d{2})\/(\d{4})/i);
+    if(mData) r.data = `${mData[3]}-${mData[2]}-${mData[1]}`;
+
+    // ── TOTAL ── confirmado: span.totalNumb.txtMax contém "36,79"
+    const elTotal = doc.querySelector('.totalNumb.txtMax');
+    if(elTotal){
+      const vt = parseFloat(elTotal.textContent.trim().replace(/\./g,'').replace(',','.'));
+      if(vt > 0) r.valor = vt;
     }
-    if(!r.fornecedor){
-      for(const inp of doc.querySelectorAll('input[value],textarea')){
-        const vv3=(inp.value||inp.textContent||'').trim();
-        if(vv3.length>5&&vv3.length<100&&/[A-Z]{3,}/.test(vv3)&&!vv3.match(/^\d/)){ r.fornecedor=vv3; break; }
-      }
+    // Fallback: "Valor a pagar R$:" seguido do valor
+    if(!r.valor){
+      const mVal = txt.match(/Valor a pagar R\$[:\s]*([\d.,]+)/i);
+      if(mVal) r.valor = parseFloat(mVal[1].replace(/\./g,'').replace(',','.'));
     }
 
-    // ── CNPJ ──
-    for(const label of allLabels){
-      if(label.textContent.toLowerCase().includes('cnpj')){
-        let nx3=label.nextElementSibling;
-        while(nx3&&nx3.tagName!=='INPUT') nx3=nx3.nextElementSibling;
-        if(nx3){ const vc=(nx3.value||'').replace(/\D/g,''); if(vc.length>=14){r.cnpj=vc;break;} }
-      }
-    }
-    if(!r.cnpj){ const mc=txt.match(/(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/); if(mc) r.cnpj=mc[1].replace(/\D/g,''); }
-    if(!r.cnpj&&chave?.length===44) r.cnpj=chave.substring(6,20);
+    // ── FORMA DE PAGAMENTO ── confirmado: label.tx contém "Cartão de Débito"
+    const elForma = doc.querySelector('label.tx, .tx');
+    if(elForma) r.formaPgto = elForma.textContent.trim();
 
-    // ── DATA ──
-    for(const label of allLabels){
-      const lt2=label.textContent.toLowerCase();
-      if(lt2.includes('emissão')||lt2.includes('emissao')){
-        let nx4=label.nextElementSibling;
-        while(nx4&&nx4.tagName!=='INPUT') nx4=nx4.nextElementSibling;
-        if(nx4){ const mdate=(nx4.value||'').match(/(\d{2})\/(\d{2})\/(\d{4})/); if(mdate){r.data=`${mdate[3]}-${mdate[2]}-${mdate[1]}`;break;} }
-      }
-    }
-    if(!r.data||r.data===hoje){ const md2=txt.match(/(\d{2})\/(\d{2})\/(\d{4})/); if(md2) r.data=`${md2[3]}-${md2[2].padStart(2,'0')}-${md2[1].padStart(2,'0')}`; }
+    // ── ITENS ── confirmado: table#tabResult tbody tr
+    // Cada tr tem: span.txtTit (desc), .Rqtd (qtd), .RUN (un), .RvlUnit (vUnit), .valor (vTotal)
+    const tabela = doc.querySelector('#tabResult') || doc.querySelector('table[data-filter]');
+    if(tabela){
+      tabela.querySelectorAll('tbody tr').forEach(tr => {
+        const elDesc  = tr.querySelector('.txtTit');
+        const elQtd   = tr.querySelector('.Rqtd');
+        const elUN    = tr.querySelector('.RUN');
+        const elVUnit = tr.querySelector('.RvlUnit');
+        const elVTot  = tr.querySelector('.valor');
+        if(!elDesc) return;
 
-    // ── VALOR TOTAL ──
-    for(const label of allLabels){
-      if(label.textContent.toLowerCase().includes('valor total')){
-        let nx5=label.nextElementSibling;
-        while(nx5&&nx5.tagName!=='INPUT') nx5=nx5.nextElementSibling;
-        if(nx5){ const vt=parseFloat((nx5.value||'').replace(',','.')); if(vt>0&&vt<1000000){r.valor=vt;break;} }
-      }
-    }
-    if(!r.valor){ const mv=txt.match(/Valor Total[^\d]*(\d{1,3}(?:\.\d{3})*,\d{2})/i); if(mv) r.valor=parseFloat(mv[1].replace(/\./g,'').replace(',','.')); }
+        const descricao = elDesc.textContent.trim();
+        // Remove os labels "Qtde.: ", "UN: ", "Vl. Unit.: "
+        const qtdTxt   = (elQtd?.textContent||'1').replace(/.*Qtde\.:\s*/i,'').trim();
+        const unidade  = (elUN?.textContent ||'UN').replace(/.*UN:\s*/i,'').trim();
+        const vUnitTxt = (elVUnit?.textContent||'0').replace(/.*Vl\.\s*Unit\.:\s*/i,'').trim();
+        const vTotTxt  = (elVTot?.textContent||'0').trim();
 
-    // ── ITENS — tabela "Dados dos Produtos e Serviços" (SEFAZ-PE) ──
-    for(const tabela of doc.querySelectorAll('table')){
-      const thead=tabela.querySelector('thead');
-      if(!thead) continue;
-      const ths=Array.from(thead.querySelectorAll('th')).map(th=>th.textContent.trim().toLowerCase());
-      if(!ths.some(t=>t.includes('descri'))) continue;
-      const iDesc  = ths.findIndex(t=>t.includes('descri'));
-      const iQtd   = ths.findIndex(t=>t.includes('qtd')||t.includes('quant'));
-      const iUnid  = ths.findIndex(t=>t.includes('unidade'));
-      const iVUnit = ths.findIndex(t=>t.includes('unit'));
-      const iValor = ths.length-1;
-      for(const tr of tabela.querySelectorAll('tbody tr')){
-        const getCel=idx=>{
-          const tds=tr.querySelectorAll('td');
-          if(idx<0||idx>=tds.length) return '';
-          const inp2=tds[idx].querySelector('input');
-          return (inp2?.value||tds[idx].textContent||'').trim();
-        };
-        const desc  = getCel(iDesc>=0?iDesc:1);
-        const qtdS  = getCel(iQtd>=0?iQtd:2);
-        const unid  = getCel(iUnid>=0?iUnid:3);
-        const vUniS = getCel(iVUnit>=0?iVUnit:4);
-        const valS  = getCel(iValor);
-        if(!desc||desc.length<2) continue;
-        const qtd  = parseFloat(qtdS.replace(',','.'))||1;
-        const vUni = parseFloat(vUniS.replace(',','.'))||0;
-        const val  = parseFloat(valS.replace(',','.'))||0;
-        if(val<=0&&vUni<=0) continue;
-        r.itens.push({descricao:desc,qtd,unidade:unid||'UN',vUnit:vUni,valor:val>0?val:(qtd*vUni),cat:''});
-      }
-      if(r.itens.length>0) break;
+        const qtd   = parseFloat(qtdTxt.replace(',','.'))   || 1;
+        const vUnit = parseFloat(vUnitTxt.replace(',','.')) || 0;
+        const valor = parseFloat(vTotTxt.replace(',','.'))  || (qtd * vUnit);
+
+        if(descricao && valor > 0){
+          r.itens.push({descricao, qtd, unidade: unidade||'UN', vUnit, valor, cat:''});
+        }
+      });
     }
-  }catch(e){ console.error('NF-e parse:',e); }
+
+    // Soma itens se total não veio
+    if(!r.valor && r.itens.length > 0){
+      r.valor = r.itens.reduce((a,it)=>a+it.valor, 0);
+    }
+
+  }catch(e){ console.error('NF-e parse erro:', e); }
   return r;
 }
 
 function nfeAplicarDados(dados){
   document.getElementById('nfe-fornecedor').value = dados.nomeFantasia||dados.fornecedor||'';
   document.getElementById('nfe-valor').value       = dados.valor>0 ? dados.valor.toFixed(2) : '';
-  document.getElementById('nfe-data').value         = dados.data||hoje;
+  document.getElementById('nfe-data').value        = dados.data||hoje;
   document.getElementById('nfe-limpar-btn').style.display='block';
 
   if(dados.cnpj){
@@ -3354,13 +3358,23 @@ function nfeAplicarDados(dados){
     document.getElementById('nfe-cnpj-valor').textContent=nfeFmtCNPJ(dados.cnpj);
   }
 
-  // Observação com rastreabilidade
+  // Forma de pagamento — mapeia para as opções do select
+  if(dados.formaPgto){
+    const fp=dados.formaPgto.toLowerCase();
+    const mapa={'pix':'Pix','dinheiro':'Dinheiro','débito':'Débito','debito':'Débito',
+                'crédito':'Crédito','credito':'Crédito','boleto':'Boleto','ted':'TED/DOC'};
+    const formaMapeada=Object.entries(mapa).find(([k])=>fp.includes(k))?.[1]||'';
+    if(formaMapeada){ const el=document.getElementById('nfe-forma'); if(el) el.value=formaMapeada; }
+  }
+
+  // Observação com rastreabilidade completa
   const obs=[
-    dados.fonte==='sefaz'?'✅ SEFAZ':'📋 QR Code',
-    dados.nomeFantasia?`Fantasia: ${dados.nomeFantasia}`:'',
-    dados.fornecedor&&dados.nomeFantasia?`Razão: ${dados.fornecedor}`:'',
-    dados.chave?`Chave: ${dados.chave.substring(0,20)}...`:'',
-    dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:'',
+    dados.fonte==='sefaz'?'✅ SEFAZ-PE':'📋 QR Code',
+    dados.nomeFantasia?'Fantasia: '+dados.nomeFantasia:'',
+    dados.fornecedor&&dados.nomeFantasia?'Razão: '+dados.fornecedor:'',
+    dados.formaPgto?'Pgto: '+dados.formaPgto:'',
+    dados.chave?'Chave: '+dados.chave.substring(0,20)+'...':'',
+    dados.cnpj?'CNPJ: '+nfeFmtCNPJ(dados.cnpj):'',
   ].filter(Boolean).join(' | ');
   document.getElementById('nfe-obs').value=obs;
 
@@ -3379,7 +3393,7 @@ function nfeAplicarDados(dados){
   }
 
   document.getElementById('nfe-result-subtitle').textContent =
-    dados.nomeFantasia||dados.fornecedor||(dados.cnpj?`CNPJ: ${nfeFmtCNPJ(dados.cnpj)}`:'Nota lida');
+    dados.nomeFantasia||dados.fornecedor||(dados.cnpj?'CNPJ: '+nfeFmtCNPJ(dados.cnpj):'Nota lida');
 
   // ── Renderiza tabela de itens ──
   nfeRenderItens(dados.itens||[]);
@@ -3562,103 +3576,42 @@ function nfeLimpar(){
 }
 
 function nfeChaveInput(el){
-  // Remove tudo que não for número
   const numeros = el.value.replace(/\D/g,'').substring(0,44);
   el.value = numeros;
-  const btn  = document.getElementById('nfe-chave-btn');
-  const info = document.getElementById('nfe-chave-info');
-  const qtd  = numeros.length;
-
+  const qtd = numeros.length;
+  // Atualiza contador
+  const counter = document.getElementById('nfe-chave-counter');
+  if(counter){
+    counter.textContent = qtd + ' / 44 dígitos';
+    counter.style.color = qtd===44 ? 'var(--green)' : 'var(--muted)';
+  }
+  // Preview da chave quando completa (44 dígitos)
   if(qtd === 44){
-    btn.disabled = false;
-    btn.style.opacity = '1';
-    // Extrai info prévia da chave sem consultar a SEFAZ
     const uf   = numeros.substring(0,2);
     const cnpj = numeros.substring(6,20);
     const ano  = '20'+numeros.substring(2,4);
     const mes  = numeros.substring(4,6);
-    const ufMap = {'26':'PE','35':'SP','33':'RJ','31':'MG','41':'PR','43':'RS','29':'BA','23':'CE','13':'AM','15':'PA'};
-    info.innerHTML = `✅ Chave válida &nbsp;·&nbsp; UF: <strong>${ufMap[uf]||uf}</strong> &nbsp;·&nbsp; CNPJ: <strong>${nfeFmtCNPJ(cnpj)}</strong> &nbsp;·&nbsp; Emissão: <strong>${mes}/${ano}</strong>`;
-    info.style.color = 'var(--green)';
-  } else {
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    const faltam = 44 - qtd;
-    info.textContent = qtd > 0 ? `Faltam ${faltam} dígito${faltam!==1?'s':''}` : 'Digite os 44 dígitos numéricos da chave de acesso impressa na nota';
-    info.style.color = 'var(--muted)';
+    const ufMap = {'26':'PE','35':'SP','33':'RJ','31':'MG','41':'PR','43':'RS','29':'BA','23':'CE'};
+    if(counter){
+      counter.innerHTML = '✅ UF: <strong>'+(ufMap[uf]||uf)+'</strong> &nbsp;·&nbsp; CNPJ: <strong>'+nfeFmtCNPJ(cnpj)+'</strong> &nbsp;·&nbsp; '+mes+'/'+ano;
+      counter.style.color = 'var(--green)';
+    }
   }
 }
 
 async function nfeConsultarChave(){
-  const chave = document.getElementById('nfe-chave-manual').value.replace(/\D/g,'');
+  const chave = (document.getElementById('nfe-chave-input')?.value||'').replace(/\D/g,'');
   if(chave.length !== 44){
-    notify('A chave de acesso deve ter exatamente 44 dígitos.', true);
+    nfeStatusErro('A chave de acesso deve ter exatamente 44 dígitos numéricos.');
     return;
   }
-
-  // Cache — não consulta a mesma nota duas vezes
-  if(nfeCache[chave]){
-    nfeAplicarDados(nfeCache[chave]);
-    nfeStatusOk('Dados carregados do cache desta sessão.');
-    return;
-  }
-
-  nfeStatusLoad('Consultando SEFAZ-PE com a chave de acesso...');
-  document.getElementById('nfe-chave-btn').disabled = true;
-
-  // Monta URL de consulta da SEFAZ-PE
-  const urlSefaz = `https://nfce.sefaz.pe.gov.br/nfce-web/consNfce?tp=C&chave=${chave}`;
-
-  // Extrai dados iniciais direto da chave (sem consulta)
-  const dadosChave = {
-    chave,
-    urlOriginal: urlSefaz,
-    valor:       0,
-    data:        `20${chave.substring(2,4)}-${chave.substring(4,6)}-${chave.substring(6,8)}`,
-    fornecedor:  '',
-    nomeFantasia:'',
-    cnpj:        chave.substring(6,20),
-    itens:       [],
-    fonte:       'chave',
-  };
-
-  // Tenta consultar via proxy CORS
-  let dadosSefaz = null;
-  try {
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(urlSefaz)}`;
-    const resp  = await Promise.race([
-      fetch(proxy),
-      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),10000))
-    ]);
-    if(resp.ok){
-      const html = await resp.text();
-      dadosSefaz = nfeParseHTML(html, chave, urlSefaz);
-    }
-  } catch(e){
-    console.warn('SEFAZ chave consulta:', e.message);
-  }
-
-  // Mescla dados — prioriza SEFAZ
-  const dados = {
-    chave,
-    urlOriginal: urlSefaz,
-    valor:       dadosSefaz?.valor      > 0 ? dadosSefaz.valor      : dadosChave.valor,
-    data:        dadosSefaz?.data           ? dadosSefaz.data        : dadosChave.data,
-    fornecedor:  dadosSefaz?.fornecedor     ? dadosSefaz.fornecedor  : '',
-    nomeFantasia:dadosSefaz?.nomeFantasia   ? dadosSefaz.nomeFantasia: '',
-    cnpj:        dadosSefaz?.cnpj           ? dadosSefaz.cnpj        : dadosChave.cnpj,
-    itens:       dadosSefaz?.itens?.length  ? dadosSefaz.itens       : [],
-    fonte:       dadosSefaz?.valor > 0      ? 'sefaz'                : 'chave',
-  };
-
-  nfeCache[chave] = dados;
-  nfeAplicarDados(dados);
-
-  // Limpa o campo e restaura botão
-  document.getElementById('nfe-chave-manual').value = '';
-  document.getElementById('nfe-chave-btn').disabled = false;
-  document.getElementById('nfe-chave-info').textContent = 'Digite os 44 dígitos numéricos da chave de acesso impressa na nota';
-  document.getElementById('nfe-chave-info').style.color = 'var(--muted)';
+  // Limpa o campo após capturar
+  const inpEl = document.getElementById('nfe-chave-input');
+  if(inpEl) inpEl.value='';
+  const counter = document.getElementById('nfe-chave-counter');
+  if(counter){ counter.textContent='0 / 44 dígitos'; counter.style.color='var(--muted)'; }
+  // Delega para o fluxo principal passando a chave diretamente
+  await nfeProcessarURL(`https://nfce.sefaz.pe.gov.br/nfce-web/consNfce?tp=C&chave=${chave}`, chave);
 }
 
 function nfeRenderHistorico(){
