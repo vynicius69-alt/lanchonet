@@ -857,7 +857,7 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
               <div class="nfe-field">
-                <label>Categoria</label>
+                <label>Categoria Padrão</label>
                 <select class="form-input" id="nfe-cat"></select>
               </div>
               <div class="nfe-field">
@@ -868,31 +868,90 @@ select.form-input option{background:#1A1A2E;color:var(--text);}
                 </select>
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-              <div class="nfe-field">
-                <label>Conta Bancária *</label>
-                <select class="form-input" id="nfe-conta"></select>
-              </div>
-              <div class="nfe-field">
-                <label>Forma de Pagamento</label>
-                <select class="form-input" id="nfe-forma">
-                  <option>Pix</option><option>Dinheiro</option><option>Débito</option>
-                  <option>Crédito</option><option>Boleto</option><option>TED/DOC</option>
-                </select>
-              </div>
+
+            <div class="nfe-field">
+              <label>Conta Bancária *</label>
+              <select class="form-input" id="nfe-conta"></select>
             </div>
+
             <div class="nfe-field">
               <label>Fornecedor (cadastro)</label>
               <select class="form-input" id="nfe-forn-select"><option value="">— Nenhum —</option></select>
             </div>
-            <div class="nfe-field">
-              <label>Observação / Chave de Acesso</label>
-              <input class="form-input" id="nfe-obs" placeholder="Chave de acesso e outros dados da nota...">
+
+            <!-- LISTA DE ITENS DA NOTA -->
+            <div id="nfe-itens-section" style="display:none;margin-bottom:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">
+                  📦 Itens da Nota
+                </label>
+                <span style="font-size:11px;color:var(--muted)" id="nfe-itens-count">0 itens</span>
+              </div>
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                <div style="overflow-x:auto;max-height:260px;overflow-y:auto;">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px;" id="nfe-itens-table">
+                    <thead>
+                      <tr style="background:var(--card2);">
+                        <th style="padding:8px 10px;text-align:left;color:var(--muted);font-size:11px;white-space:nowrap;">Descrição</th>
+                        <th style="padding:8px 6px;text-align:center;color:var(--muted);font-size:11px;">Qtd</th>
+                        <th style="padding:8px 6px;text-align:center;color:var(--muted);font-size:11px;">UN</th>
+                        <th style="padding:8px 6px;text-align:right;color:var(--muted);font-size:11px;">Vl.Unit</th>
+                        <th style="padding:8px 10px;text-align:right;color:var(--muted);font-size:11px;">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="nfe-itens-tbody"></tbody>
+                    <tfoot id="nfe-itens-tfoot"></tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- PAGAMENTO MISTO -->
+            <div style="margin-bottom:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">
+                  💳 Formas de Pagamento
+                </label>
+                <button class="btn btn-outline btn-sm" onclick="nfeAddPagamento()" id="nfe-add-pgto-btn" style="font-size:11px;padding:4px 10px;">+ Adicionar forma</button>
+              </div>
+              <div id="nfe-pagamentos-list">
+                <!-- Linha 1 — sempre visível -->
+                <div class="nfe-pgto-linha" id="nfe-pgto-0" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                  <select class="form-input" id="nfe-forma-0" style="flex:1.2;">
+                    <option>Pix</option><option>Dinheiro</option><option>Débito</option>
+                    <option>Crédito</option><option>Boleto</option><option>TED/DOC</option>
+                  </select>
+                  <input class="form-input" id="nfe-pgto-val-0" type="number" step="0.01" min="0"
+                    placeholder="Valor R$" style="flex:1;color:var(--green);font-weight:700;"
+                    oninput="nfeAtualizarTotais()">
+                  <button class="btn btn-danger btn-sm btn-icon" onclick="nfeRemovePagamento(0)" style="display:none;" title="Remover">✕</button>
+                </div>
+              </div>
+              <!-- Resumo de totais -->
+              <div id="nfe-pgto-resumo" style="display:none;padding:10px 12px;background:var(--card2);border-radius:8px;font-size:12px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                  <span style="color:var(--muted)">Total da nota:</span>
+                  <span style="font-weight:700;" id="nfe-pgto-total-nota">R$ 0,00</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                  <span style="color:var(--muted)">Total informado:</span>
+                  <span style="font-weight:700;" id="nfe-pgto-total-info">R$ 0,00</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-weight:700;" id="nfe-pgto-diff-row">
+                  <span id="nfe-pgto-diff-label">Diferença:</span>
+                  <span id="nfe-pgto-diff-val">R$ 0,00</span>
+                </div>
+              </div>
             </div>
 
             <!-- CNPJ informativo -->
             <div id="nfe-cnpj-bar" style="display:none;padding:9px 13px;background:rgba(52,152,219,.08);border-radius:8px;font-size:12px;color:var(--muted);margin-bottom:14px;">
               🏢 CNPJ Emitente: <strong id="nfe-cnpj-valor" style="color:var(--text)">—</strong>
+            </div>
+
+            <div class="nfe-field">
+              <label>Observação / Chave de Acesso</label>
+              <input class="form-input" id="nfe-obs" placeholder="Chave de acesso e outros dados da nota...">
             </div>
 
             <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;font-size:14px;" onclick="nfeSalvarLancamento()" id="nfe-salvar-btn">
@@ -3398,11 +3457,26 @@ function nfeAplicarDados(dados){
   // ── Renderiza tabela de itens ──
   nfeRenderItens(dados.itens||[]);
 
+  // ── Preenche forma de pagamento automaticamente ──
+  if(dados.valor > 0){
+    const val0 = document.getElementById('nfe-pgto-val-0');
+    if(val0 && !val0.value) val0.value = dados.valor.toFixed(2);
+    // Mapeia forma da nota para o select
+    if(dados.formaPgto){
+      const fp = dados.formaPgto.toLowerCase();
+      const mapa = {'pix':'Pix','dinheiro':'Dinheiro','débito':'Débito','debito':'Débito',
+                    'crédito':'Crédito','credito':'Crédito','boleto':'Boleto','ted':'TED/DOC'};
+      const formaMapeada = Object.entries(mapa).find(([k])=>fp.includes(k))?.[1]||'';
+      if(formaMapeada){ const ef=document.getElementById('nfe-forma-0'); if(ef) ef.value=formaMapeada; }
+    }
+    nfeAtualizarTotais();
+  }
+
   // Status
   if(dados.valor>0&&(dados.fornecedor||dados.nomeFantasia)){
-    nfeStatusOk(`${dados.nomeFantasia||dados.fornecedor} — ${fmt(dados.valor)}${dados.itens?.length?` · ${dados.itens.length} iten(s)`:''}`);
+    nfeStatusOk((dados.nomeFantasia||dados.fornecedor)+' — '+fmt(dados.valor)+(dados.itens?.length?' · '+dados.itens.length+' item(s)':''));
   } else if(dados.valor>0){
-    nfeStatusAviso(`Valor: ${fmt(dados.valor)} — confirme o fornecedor`);
+    nfeStatusAviso('Valor: '+fmt(dados.valor)+' — confirme o fornecedor');
   } else {
     nfeStatusAviso('QR Code lido — preencha o valor e verifique os itens.');
   }
@@ -3413,82 +3487,90 @@ function nfeAplicarDados(dados){
 }
 
 // ── Renderiza tabela de itens com categorização por item ──
-function nfeRenderItens(itens){
-  // Remove tabela antiga se existir
-  const old=document.getElementById('nfe-itens-wrap');
-  if(old) old.remove();
-  if(!itens||!itens.length) return;
+// ── Pagamento misto ──
+let nfePgtoCount = 1;
 
-  const catOpts=(DB.tiposDesp||[]).map(t=>`<option value="${t.nome}">${t.nome}</option>`).join('');
+function nfeAddPagamento(){
+  if(nfePgtoCount >= 3){ notify('Máximo 3 formas de pagamento.',true); return; }
+  const idx = nfePgtoCount;
+  const div = document.createElement('div');
+  div.className='nfe-pgto-linha'; div.id='nfe-pgto-'+idx;
+  div.style.cssText='display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+  div.innerHTML=`<select class="form-input" id="nfe-forma-${idx}" style="flex:1.2;"><option>Pix</option><option>Dinheiro</option><option>Débito</option><option>Crédito</option><option>Boleto</option><option>TED/DOC</option></select><input class="form-input" id="nfe-pgto-val-${idx}" type="number" step="0.01" min="0" placeholder="Valor R$" style="flex:1;color:var(--green);font-weight:700;" oninput="nfeAtualizarTotais()"><button class="btn btn-danger btn-sm btn-icon" onclick="nfeRemovePagamento(${idx})" title="Remover">✕</button>`;
+  document.getElementById('nfe-pagamentos-list').appendChild(div);
+  nfePgtoCount++;
+  const btn0=document.querySelector('#nfe-pgto-0 .btn-danger'); if(btn0) btn0.style.display='flex';
+  document.getElementById('nfe-pgto-resumo').style.display='block';
+  if(nfePgtoCount>=3) document.getElementById('nfe-add-pgto-btn').style.display='none';
+  nfeAtualizarTotais();
+}
 
-  const wrap=document.createElement('div');
-  wrap.id='nfe-itens-wrap';
-  wrap.style.cssText='margin-bottom:16px;';
-  wrap.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">
-        📦 Itens da Nota (${itens.length})
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:11px;color:var(--muted)">Cat. padrão:</span>
-        <select id="nfe-cat-todos" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:7px;padding:4px 8px;color:var(--text);font-size:12px;" onchange="nfeAplicarCatTodos(this.value)">
-          <option value="">— Aplicar a todos —</option>
-          ${catOpts}
-        </select>
-      </div>
-    </div>
-    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
-      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
-        <thead>
-          <tr style="background:var(--card2);">
-            <th style="padding:9px 12px;text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Descrição</th>
-            <th style="padding:9px 8px;text-align:center;color:var(--muted);font-size:11px;white-space:nowrap;">Qtd</th>
-            <th style="padding:9px 8px;text-align:center;color:var(--muted);font-size:11px;">Un.</th>
-            <th style="padding:9px 8px;text-align:right;color:var(--muted);font-size:11px;white-space:nowrap;">Vl. Unit.</th>
-            <th style="padding:9px 8px;text-align:right;color:var(--green);font-size:11px;">Total</th>
-            <th style="padding:9px 8px;text-align:left;color:var(--muted);font-size:11px;">Categoria</th>
-          </tr>
-        </thead>
-        <tbody id="nfe-itens-tbody">
-          ${itens.map((it,i)=>`
-            <tr style="border-top:1px solid rgba(255,255,255,.04);">
-              <td style="padding:9px 12px;font-weight:500;">${it.descricao}</td>
-              <td style="padding:9px 8px;text-align:center;color:var(--muted);">${it.qtd.toLocaleString('pt-BR',{maximumFractionDigits:4})}</td>
-              <td style="padding:9px 8px;text-align:center;color:var(--muted);">${it.unidade}</td>
-              <td style="padding:9px 8px;text-align:right;color:var(--muted);">${fmt(it.vUnit)}</td>
-              <td style="padding:9px 8px;text-align:right;font-weight:700;color:var(--green);">${fmt(it.valor)}</td>
-              <td style="padding:6px 8px;">
-                <select class="nfe-item-cat" data-idx="${i}"
-                  style="width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:7px;padding:5px 6px;color:var(--text);font-size:11.5px;"
-                  onchange="nfeItens[${i}].cat=this.value">
-                  <option value="">— Categoria —</option>
-                  ${catOpts}
-                </select>
-              </td>
-            </tr>`).join('')}
-        </tbody>
-        <tfoot>
-          <tr style="background:rgba(46,204,113,.06);border-top:2px solid rgba(46,204,113,.2);">
-            <td colspan="4" style="padding:10px 12px;font-weight:700;color:var(--muted);">TOTAL</td>
-            <td style="padding:10px 8px;text-align:right;font-weight:800;font-size:14px;color:var(--green);">${fmt(itens.reduce((a,it)=>a+it.valor,0))}</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-    <div style="margin-top:10px;padding:10px 12px;background:rgba(244,162,97,.07);border-radius:8px;font-size:12px;color:var(--muted);">
-      💡 Cada item com categoria selecionada será lançado como uma <strong style="color:var(--accent)">despesa separada</strong>. Itens sem categoria usarão a categoria padrão acima.
-    </div>`;
-
-  // Insere antes do botão salvar e atualiza label
-  const btnSalvar = document.getElementById('nfe-salvar-btn');
-  if(btnSalvar){
-    btnSalvar.parentNode.insertBefore(wrap, btnSalvar);
-    btnSalvar.innerHTML = `💾 Lançar ${itens.length} item${itens.length!==1?'s':''} separados`;
+function nfeRemovePagamento(idx){
+  const el=document.getElementById('nfe-pgto-'+idx); if(el) el.remove();
+  nfePgtoCount--;
+  if(nfePgtoCount<=1){
+    const btn0=document.querySelector('#nfe-pgto-0 .btn-danger'); if(btn0) btn0.style.display='none';
+    document.getElementById('nfe-pgto-resumo').style.display='none';
   }
+  document.getElementById('nfe-add-pgto-btn').style.display='block';
+  nfeAtualizarTotais();
+}
 
-  // Salva referência dos itens no escopo global para leitura no save
-  window.nfeItens = itens.map(it=>({...it}));
+function nfeColetarPagamentos(){
+  const pgtos=[];
+  document.querySelectorAll('.nfe-pgto-linha').forEach(linha=>{
+    const id=linha.id.replace('nfe-pgto-','');
+    const forma=document.getElementById('nfe-forma-'+id)?.value||'';
+    const val=parseFloat(document.getElementById('nfe-pgto-val-'+id)?.value||0);
+    if(forma&&val>0) pgtos.push({forma,valor:val});
+  });
+  return pgtos;
+}
+
+function nfeAtualizarTotais(){
+  const totalNota=parseFloat(document.getElementById('nfe-valor')?.value||0);
+  const pgtos=nfeColetarPagamentos();
+  const totalInfo=pgtos.reduce((a,p)=>a+p.valor,0);
+  const diff=totalNota-totalInfo;
+  const el1=document.getElementById('nfe-pgto-total-nota');
+  const el2=document.getElementById('nfe-pgto-total-info');
+  const diffEl=document.getElementById('nfe-pgto-diff-val');
+  const diffLabel=document.getElementById('nfe-pgto-diff-label');
+  const diffRow=document.getElementById('nfe-pgto-diff-row');
+  if(el1) el1.textContent=fmt(totalNota);
+  if(el2) el2.textContent=fmt(totalInfo);
+  if(diffEl&&diffLabel&&diffRow){
+    if(Math.abs(diff)<0.01){diffLabel.textContent='✅ Valores conferem';diffEl.textContent='';diffRow.style.color='var(--green)';}
+    else if(diff>0){diffLabel.textContent='Falta informar:';diffEl.textContent=fmt(diff);diffRow.style.color='var(--accent)';}
+    else{diffLabel.textContent='Excesso:';diffEl.textContent=fmt(Math.abs(diff));diffRow.style.color='var(--red)';}
+  }
+  if(nfePgtoCount>1) document.getElementById('nfe-pgto-resumo').style.display='block';
+}
+
+// ── Renderiza lista de itens ──
+function nfeRenderItens(itens){
+  window.nfeItens = itens||[];
+  const section=document.getElementById('nfe-itens-section');
+  const tbody=document.getElementById('nfe-itens-tbody');
+  const tfoot=document.getElementById('nfe-itens-tfoot');
+  const counter=document.getElementById('nfe-itens-count');
+  if(!itens||!itens.length){ if(section) section.style.display='none'; return; }
+  section.style.display='block';
+  if(counter) counter.textContent=itens.length+' item'+(itens.length!==1?'s':'');
+  const catOpts='<option value="">— Categoria —</option>'+(DB.tiposDesp||[]).map(t=>`<option value="${t.nome}">${t.nome}</option>`).join('');
+  tbody.innerHTML=itens.map((it,i)=>`
+    <tr style="border-bottom:1px solid rgba(255,255,255,.04);">
+      <td style="padding:8px 10px;">
+        <div style="font-size:12px;font-weight:600;">${it.descricao}</div>
+        <select class="form-input nfe-item-cat" style="font-size:11px;padding:3px 6px;margin-top:4px;height:auto;" onchange="window.nfeItens[${i}].cat=this.value">${catOpts}</select>
+      </td>
+      <td style="padding:8px 6px;text-align:center;color:var(--muted);font-size:12px;">${it.qtd.toLocaleString('pt-BR',{maximumFractionDigits:4})}</td>
+      <td style="padding:8px 6px;text-align:center;color:var(--muted);font-size:12px;">${it.unidade||'UN'}</td>
+      <td style="padding:8px 6px;text-align:right;color:var(--muted);font-size:12px;">${fmt(it.vUnit)}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--green);font-size:12px;">${fmt(it.valor)}</td>
+    </tr>`).join('');
+  const total=itens.reduce((a,it)=>a+it.valor,0);
+  tfoot.innerHTML=`<tr style="background:var(--card2);border-top:2px solid var(--border);"><td colspan="4" style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--muted);">TOTAL (${itens.length} itens)</td><td style="padding:8px 10px;text-align:right;font-size:14px;font-weight:800;color:var(--green);">${fmt(total)}</td></tr>`;
 }
 
 function nfeAplicarCatTodos(cat){
@@ -3497,81 +3579,74 @@ function nfeAplicarCatTodos(cat){
   document.querySelectorAll('.nfe-item-cat').forEach(sel=>sel.value=cat);
 }
 
+// ── Salva — um lançamento por forma de pagamento ──
 function nfeSalvarLancamento(){
-  const data   = document.getElementById('nfe-data').value;
-  const conta  = document.getElementById('nfe-conta').value;
-  const status = document.getElementById('nfe-status-lanc').value;
-  const forma  = document.getElementById('nfe-forma').value;
-  const forn   = document.getElementById('nfe-fornecedor').value.trim();
-  const fornSel= document.getElementById('nfe-forn-select').value;
-  const catPad = document.getElementById('nfe-cat').value || 'Fornecedores';
-  const obs    = document.getElementById('nfe-obs').value;
-
+  const data    = document.getElementById('nfe-data').value;
+  const conta   = document.getElementById('nfe-conta').value;
+  const status  = document.getElementById('nfe-status-lanc').value;
+  const catPad  = document.getElementById('nfe-cat').value||'Fornecedores';
+  const obs     = document.getElementById('nfe-obs').value;
+  const forn    = document.getElementById('nfe-fornecedor').value.trim();
+  const fornSel = document.getElementById('nfe-forn-select').value;
+  const totalNota = parseFloat(document.getElementById('nfe-valor').value||0);
   if(!data||!conta){ notify('Preencha Data e Conta.',true); return; }
+  if(totalNota<=0){ notify('O valor total da nota deve ser maior que zero.',true); return; }
 
-  const itens = window.nfeItens||[];
-
-  if(itens.length > 0){
-    // ── LANÇA POR ITEM ──
-    const semCat = itens.filter(it=>!it.cat);
-    if(semCat.length > 0 && !catPad){
-      notify(`${semCat.length} item(s) sem categoria. Selecione a categoria padrão acima.`, true);
-      return;
-    }
-    if(!DB.lancamentos) DB.lancamentos=[];
-    let total = 0;
-    itens.forEach((it,i)=>{
-      const cat = it.cat || catPad;
-      const valorItem = it.valor > 0 ? it.valor : it.qtd * it.vUnit;
-      if(valorItem <= 0) return;
-      const descItem = forn
-        ? `NF-e ${forn} — ${it.descricao}`
-        : `NF-e — ${it.descricao}`;
-      DB.lancamentos.push({
-        id: newId()+i,
-        tipo: 'Despesa',
-        desc: descItem,
-        valor: valorItem,
-        data, cat, status, conta, forma,
-        entidade: fornSel||forn,
-        obs: `${it.qtd}${it.unidade} × ${fmt(it.vUnit)} | ${obs}`,
-      });
-      total += valorItem;
-    });
-    salvarDB('lancamentos', DB.lancamentos);
-    updateBadge();
-    criarNotificacao('despesa',`NF-e — ${itens.length} itens lançados`,`${forn||'Fornecedor'} · ${conta}`,fmt(total));
-    notify(`✅ ${itens.length} itens lançados como despesas! Total: ${fmt(total)}`);
-
-  } else {
-    // ── LANÇA O TOTAL (sem itens extraídos) ──
-    const valor = parseFloat(document.getElementById('nfe-valor').value);
-    if(!valor){ notify('Preencha o Valor.',true); return; }
-    if(!DB.lancamentos) DB.lancamentos=[];
-    const desc = forn ? `NF-e — ${forn}` : 'NF-e — Fornecedor';
-    DB.lancamentos.push({
-      id: newId(), tipo:'Despesa', desc, valor, data,
-      cat: catPad, status, conta, forma,
-      entidade: fornSel||forn, obs,
-    });
-    salvarDB('lancamentos', DB.lancamentos);
-    updateBadge();
-    criarNotificacao('despesa','NF-e lançada',`${desc} · ${conta}`,fmt(valor));
-    notify('NF-e lançada como despesa! ✅');
+  // Coleta formas — se vazio usa primeira forma com total
+  let pgtos = nfeColetarPagamentos();
+  if(!pgtos.length){
+    const forma0 = document.getElementById('nfe-forma-0')?.value||'Pix';
+    pgtos = [{forma:forma0, valor:totalNota}];
   }
+
+  // Valida total
+  const totalPgto = pgtos.reduce((a,p)=>a+p.valor,0);
+  if(Math.abs(totalNota-totalPgto)>0.05 && pgtos.length>1){
+    notify('Diferença entre o total da nota ('+fmt(totalNota)+') e os pagamentos ('+fmt(totalPgto)+'). Corrija antes de lançar.',true);
+    return;
+  }
+
+  if(!DB.lancamentos) DB.lancamentos=[];
+  const nomeEmit = forn||'Fornecedor';
+  const descBase = 'NF-e — '+nomeEmit;
+
+  // Um lançamento por forma de pagamento
+  pgtos.forEach((pgto,i)=>{
+    const desc = pgtos.length>1 ? descBase+' ['+pgto.forma+']' : descBase;
+    DB.lancamentos.push({
+      id: newId()+i, tipo:'Despesa', desc,
+      valor: pgto.valor, data, cat:catPad, status, conta,
+      forma: pgto.forma, entidade: fornSel||forn,
+      obs: obs+(pgtos.length>1?' | Pgto '+(i+1)+'/'+pgtos.length:''),
+    });
+  });
+
+  salvarDB('lancamentos',DB.lancamentos); updateBadge();
+  criarNotificacao('despesa','NF-e lançada'+(pgtos.length>1?' ('+pgtos.length+' formas)':''),nomeEmit+' · '+conta,fmt(totalNota));
+  notify(pgtos.length>1
+    ? '✅ '+pgtos.length+' lançamentos: '+pgtos.map(p=>p.forma+' '+fmt(p.valor)).join(' + ')
+    : '✅ NF-e lançada como despesa!');
   nfeLimpar();
 }
 
+// ── Limpa o formulário ──
 function nfeLimpar(){
   ['nfe-fornecedor','nfe-valor','nfe-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('nfe-data').value = hoje;
-  document.getElementById('nfe-cnpj-bar').style.display   = 'none';
-  document.getElementById('nfe-limpar-btn').style.display = 'none';
-  document.getElementById('nfe-result-subtitle').textContent = 'Leia um QR Code para preencher';
-  // Remove tabela de itens se existir
-  const itensWrap = document.getElementById('nfe-itens-wrap');
-  if(itensWrap) itensWrap.remove();
-  window.nfeItens = [];
+  document.getElementById('nfe-data').value=hoje;
+  document.getElementById('nfe-cnpj-bar').style.display='none';
+  document.getElementById('nfe-limpar-btn').style.display='none';
+  document.getElementById('nfe-result-subtitle').textContent='Leia um QR Code para preencher';
+  const sec=document.getElementById('nfe-itens-section'); if(sec) sec.style.display='none';
+  const tb=document.getElementById('nfe-itens-tbody'); if(tb) tb.innerHTML='';
+  const tf=document.getElementById('nfe-itens-tfoot'); if(tf) tf.innerHTML='';
+  // Reseta pagamentos
+  document.querySelectorAll('.nfe-pgto-linha').forEach((l,i)=>{if(i>0)l.remove();});
+  const v0=document.getElementById('nfe-pgto-val-0'); if(v0) v0.value='';
+  const btn0=document.querySelector('#nfe-pgto-0 .btn-danger'); if(btn0) btn0.style.display='none';
+  document.getElementById('nfe-pgto-resumo').style.display='none';
+  document.getElementById('nfe-add-pgto-btn').style.display='block';
+  document.getElementById('nfe-salvar-btn').innerHTML='💾 Lançar como Despesa';
+  nfePgtoCount=1; window.nfeItens=[];
   nfeStatusOcultar();
 }
 
